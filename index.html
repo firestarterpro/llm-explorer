@@ -1,0 +1,977 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Composer — Export Build</title>
+<style>
+  :root {
+    --bg:#0f1115; --panel:#171a21; --panel-2:#1d2129; --border:#2a2f3a;
+    --text:#e6e8ee; --muted:#8a92a6; --accent:#6ea8fe; --accent-2:#4f7dd6;
+    --amber:#f0b429; --green:#3fb950; --red:#f85149; --purple:#a371f7;
+    --radius:8px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font:16px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+
+  .app { display:grid; height:100vh;
+    grid-template-columns: 240px 1fr;
+    grid-template-rows: auto 1fr auto;
+    grid-template-areas: "top top" "left center" "bottom bottom"; }
+
+  /* ---- Top ---- */
+  .topbar { grid-area: top; display:flex; align-items:flex-end; gap:8px;
+    padding:6px 10px 0; border-bottom:1px solid var(--border); background:var(--panel);
+    position:relative; }
+  .tabs { display:flex; gap:3px; flex:1; overflow-x:auto; }
+  .tab { padding:7px 13px; border:1px solid transparent; border-bottom:none;
+    border-radius:6px 6px 0 0; background:transparent; color:var(--muted);
+    cursor:pointer; font-size:16px; white-space:nowrap; font-family:inherit; }
+  .tab.active { background:var(--bg); color:var(--text); border-color:var(--border); }
+  .branch-pill, .legend-pill { font-size:15px; color:var(--muted); padding:6px 11px;
+    border:1px solid var(--border); border-radius:6px; cursor:pointer;
+    white-space:nowrap; margin-bottom:4px; background:transparent; font:inherit; }
+  .branch-pill:hover, .legend-pill:hover { border-color:var(--accent); color:var(--text); }
+  .legend-pill.open { border-color:var(--accent); color:var(--text); }
+
+  .legend-drop { position:absolute; top:calc(100% + 4px); right:60px;
+    background:var(--panel-2); border:1px solid var(--accent);
+    border-radius:10px; padding:12px; width:360px;
+    box-shadow:0 12px 40px rgba(0,0,0,.7); z-index:50;
+    display:none; font-size:14px; }
+  .legend-drop.open { display:block; }
+  .legend-drop .ld-head { display:flex; align-items:center; gap:6px;
+    font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--accent); margin-bottom:8px; }
+  .legend-drop .ld-head .spacer { flex:1; }
+  .legend-drop .ctx-switch { display:flex; gap:3px; margin-bottom:10px; }
+  .legend-drop .ctx-switch button { flex:1; padding:5px 7px; font-size:12px;
+    background:var(--panel); border:1px solid var(--border); border-radius:4px;
+    color:var(--muted); cursor:pointer; }
+  .legend-drop .ctx-switch button.active { color:var(--text); border-color:var(--accent); }
+  .legend-drop .legend-list { display:flex; flex-direction:column; gap:6px;
+    max-height:340px; overflow-y:auto; }
+  .legend-drop .legend-item { display:flex; gap:8px; align-items:flex-start; }
+  .legend-drop .legend-item .ico { min-width:24px; font-size:16px; text-align:center; }
+  .legend-drop .legend-item .txt { color:var(--muted); line-height:1.4; }
+
+  /* ---- Left ---- */
+  .leftbar { grid-area: left; border-right:1px solid var(--border);
+    background:var(--panel); padding:10px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:10px; }
+  .lb-section { font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); padding:2px 0; }
+  .master-slider { background:var(--panel-2); border:1px solid var(--border);
+    border-radius:var(--radius); padding:9px 11px; }
+  .master-slider .head { display:flex; align-items:center;
+    margin-bottom:7px; gap:8px; }
+  .master-slider .label { font-size:13px; color:var(--muted); }
+  .master-slider .spacer { flex:1; }
+  .master-slider .val { font-size:14px; color:var(--amber); font-weight:600;
+    font-variant-numeric:tabular-nums; }
+  .master-slider .lock-btn { background:transparent; border:1px solid transparent;
+    color:var(--muted); cursor:pointer; padding:2px 5px;
+    border-radius:4px; font-size:15px; opacity:.4; }
+  .master-slider .lock-btn:hover { background:rgba(255,255,255,.06); opacity:.8; }
+  .master-slider .lock-btn.on { opacity:1; border-color:var(--accent);
+    filter:drop-shadow(0 0 4px var(--accent)); }
+  .master-slider input[type="range"] { width:100%; accent-color:var(--amber);
+    height:5px; cursor:pointer; }
+
+  .trio-toggle { display:flex; align-items:center; gap:8px; padding:8px 11px;
+    background:var(--panel-2); border:1px solid var(--border);
+    border-radius:var(--radius); cursor:pointer; font-size:14px; }
+  .trio-toggle:hover { border-color:var(--green); }
+  .trio-toggle.on { border-color:var(--green); color:var(--green); }
+  .trio-toggle .sw { width:32px; height:18px; border-radius:10px;
+    background:var(--border); position:relative; transition:background .15s; }
+  .trio-toggle.on .sw { background:var(--green); }
+  .trio-toggle .sw::after { content:''; position:absolute; top:2px; left:2px;
+    width:14px; height:14px; border-radius:50%; background:#fff;
+    transition:transform .15s; }
+  .trio-toggle.on .sw::after { transform:translateX(14px); }
+
+  .llm-row { padding:9px 11px; border:1px solid var(--border); background:var(--panel-2);
+    border-radius:6px; display:flex; flex-direction:column; gap:6px;
+    cursor:pointer; transition:border-color .12s; }
+  .llm-row:hover { border-color:var(--accent); }
+  .llm-row.off { opacity:.45; }
+  .llm-row .llm-head { display:flex; align-items:center; gap:9px; font-size:15px; }
+  .llm-row .llm-head input[type="checkbox"] { accent-color:var(--accent);
+    margin:0; width:22px; height:22px; cursor:pointer; pointer-events:none; }
+  .llm-row .llm-emoji { font-size:18px; }
+  .llm-row .llm-name { flex:1; font-weight:600; }
+  .llm-row .llm-tok { font-size:14px; color:var(--amber);
+    font-variant-numeric:tabular-nums; min-width:40px; text-align:right; }
+  .llm-row .llm-tok.unl { color:var(--green); }
+  .llm-row .llm-tog { background:transparent; border:none; color:var(--muted);
+    padding:2px 4px; font-size:15px; cursor:pointer; border-radius:3px;
+    opacity:.35; }
+  .llm-row .llm-tog.on { opacity:1; }
+  .llm-row .llm-tog:hover { background:rgba(255,255,255,.06); }
+  .llm-row input[type="range"] { width:100%; accent-color:var(--amber);
+    height:4px; cursor:pointer; margin:0; }
+  .llm-row .prefix { font-size:12px; color:var(--muted); font-style:italic;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+    padding-top:4px; border-top:1px dashed var(--border); }
+
+  /* ---- Center ---- */
+  .center { grid-area: center; overflow-y:auto; padding:18px 24px; }
+  .wrap { max-width:900px; margin:0 auto; }
+  .turn { margin-bottom:22px; border-left:2px solid transparent;
+    padding-left:12px; }
+  .turn.in-ctx { border-left-color:var(--accent); }
+
+  .turn-head { display:flex; align-items:center; justify-content:center;
+    gap:10px; margin-bottom:10px; font-size:13px; color:var(--muted);
+    letter-spacing:.06em; text-transform:uppercase; cursor:pointer;
+    user-select:none; padding:5px 0; border-top:1px solid var(--border);
+    border-bottom:1px solid var(--border); }
+  .turn-head:hover { color:var(--text); }
+  .turn-head .tnum { color:var(--accent); font-weight:600; }
+  .turn-head .log-btn { background:transparent; border:none; color:var(--muted);
+    cursor:pointer; padding:2px 6px; border-radius:4px; font-size:14px; }
+
+  .prompt-card { padding:11px 13px; border-radius:var(--radius);
+    background:#141821; border:1px solid var(--border); font-size:16px;
+    margin-bottom:10px; white-space:pre-wrap; word-wrap:break-word; }
+  .prompt-card .who { font-size:11px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+
+  .hybrid-card { border-radius:var(--radius); background:#161e2e;
+    border:1px solid #2a3d5c; overflow:hidden; margin-bottom:6px; }
+  .hybrid-label { font-size:11px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--accent); padding:7px 12px 0 12px; }
+  .hybrid-body { padding:5px 12px 10px 12px; font-size:16px;
+    white-space:pre-wrap; word-wrap:break-word; }
+
+  .score-bar { padding:8px 12px; font-size:14px; cursor:pointer;
+    background:rgba(63,185,80,.09); color:var(--green);
+    border-top:1px solid var(--border);
+    display:flex; gap:8px; align-items:flex-start; }
+  .score-bar.mid { background:rgba(240,180,41,.09); color:var(--amber); }
+  .score-bar.low { background:rgba(248,81,73,.09); color:var(--red); }
+  .score-bar .pct { font-weight:700; white-space:nowrap;
+    font-variant-numeric:tabular-nums; min-width:56px; }
+  .score-bar .reason { flex:1; color:var(--muted); font-weight:400;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .score-bar.open .reason { white-space:normal; }
+
+  .source-bar { display:flex; align-items:center; gap:6px; padding:7px 10px;
+    border-top:1px solid var(--border); background:rgba(0,0,0,.15);
+    cursor:pointer; user-select:none; }
+  .source-bar:hover { background:rgba(255,255,255,.03); }
+  .src-emoji { background:var(--panel); border:1px solid var(--border);
+    color:var(--text); cursor:pointer; padding:4px 9px; font-size:15px;
+    border-radius:6px; font-family:inherit; }
+  .src-emoji:hover { border-color:var(--accent); }
+  .src-emoji.on { border-color:var(--accent); background:#1a2130;
+    box-shadow:0 0 0 1px var(--accent) inset; }
+  .src-emoji.omitted { opacity:.45; }
+  .source-bar .spacer { flex:1; }
+  .source-bar .bar-act { background:transparent; border:1px solid var(--border);
+    color:var(--muted); cursor:pointer; padding:4px 9px; font-size:13px;
+    border-radius:5px; font-family:inherit; }
+  .source-bar .bar-act:hover { color:var(--text); border-color:var(--accent); }
+
+  .src-reply { display:none; border-top:1px solid var(--border);
+    background:var(--panel); padding:10px 12px; font-size:16px;
+    white-space:pre-wrap; word-wrap:break-word; }
+  .src-reply.open { display:block; }
+  .src-reply .src-head { font-size:11px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:5px;
+    display:flex; gap:8px; align-items:center; }
+  .src-reply .src-head .time { color:var(--muted); font-size:12px;
+    text-transform:none; letter-spacing:0; }
+  .src-reply .src-head .pct { margin-left:auto; color:var(--green);
+    font-weight:600; font-variant-numeric:tabular-nums; }
+  .src-reply .src-head .pct.mid { color:var(--amber); }
+  .src-reply .src-head .pct.low { color:var(--red); }
+  .src-reply .src-reason { font-size:12px; color:var(--muted);
+    margin-top:7px; padding-top:6px; border-top:1px dashed var(--border); }
+
+  /* ---- Bottom ---- */
+  .bottom { grid-area: bottom; border-top:1px solid var(--border);
+    background:var(--panel); padding:10px 14px;
+    display:flex; flex-direction:column; gap:7px; }
+  .bottom-inner { max-width:900px; margin:0 auto; width:100%;
+    display:flex; flex-direction:column; gap:7px; }
+
+  .history { background:var(--panel-2); border:1px solid var(--border);
+    border-radius:var(--radius); padding:9px 11px;
+    display:flex; flex-direction:column; gap:7px; }
+  .hs-head { display:flex; align-items:center; gap:8px;
+    font-size:12px; color:var(--muted); letter-spacing:.08em;
+    text-transform:uppercase; }
+  .hs-head .spacer { flex:1; }
+  .hs-head .meta { font-variant-numeric:tabular-nums; color:var(--accent);
+    letter-spacing:0; text-transform:none; font-size:13px; }
+  .hs-row { display:flex; align-items:center; gap:10px; }
+  .hs-preview { flex:1; min-width:0; font-size:14px; color:var(--muted);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .hs-preview strong { color:var(--text); font-weight:600; }
+  .hs-track { flex:0 0 240px; }
+  .hs-track input[type="range"] { width:100%; accent-color:var(--amber);
+    height:5px; cursor:pointer; }
+  .hs-stats { display:flex; gap:14px; font-size:13px; color:var(--muted);
+    font-variant-numeric:tabular-nums; }
+  .hs-stats strong { color:var(--text); font-weight:600; }
+
+  #masterText { width:100%; min-height:52px; max-height:140px; resize:vertical;
+    background:var(--bg); color:var(--text); border:1px solid var(--border);
+    border-radius:var(--radius); padding:9px 11px; font:inherit;
+    font-size:16px; outline:none; }
+  #masterText:focus { border-color:var(--accent); }
+
+  .toolbar { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+  button { font:inherit; cursor:pointer; border-radius:6px;
+    border:1px solid var(--border); background:var(--panel-2); color:var(--text);
+    padding:6px 10px; font-size:16px; line-height:1; }
+  button:hover { border-color:var(--accent); }
+  button.primary { background:var(--accent-2); border-color:var(--accent-2); color:#fff; }
+  button.toggle { opacity:.45; }
+  button.toggle.on { opacity:1; border-color:var(--accent);
+    box-shadow:0 0 0 1px var(--accent) inset; }
+  button.free.on { border-color:var(--green); color:var(--green);
+    box-shadow:0 0 0 1px var(--green) inset; }
+
+  .statusbar { display:flex; gap:12px; padding:6px 9px; font-size:13px;
+    background:#0b0d11; border:1px solid var(--border); border-radius:6px;
+    font-variant-numeric:tabular-nums; min-height:28px; align-items:center; }
+  .sb-prompt { color:var(--accent); font-weight:600; white-space:nowrap; }
+  .sb-timer { color:var(--amber); white-space:nowrap; font-weight:600; }
+  .sb-timer.done { color:var(--green); }
+  .sb-status { color:var(--muted); white-space:nowrap; }
+  .sb-progress { flex:1; height:3px; background:var(--border); border-radius:2px;
+    overflow:hidden; min-width:60px; position:relative; }
+  .sb-progress .fill { position:absolute; inset:0 auto 0 0;
+    background:linear-gradient(90deg, var(--amber), var(--accent));
+    transition:width .5s linear; }
+
+  ::-webkit-scrollbar { width:9px; height:9px; }
+  ::-webkit-scrollbar-thumb { background:#2a2f3a; border-radius:10px; }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <div class="topbar">
+    <div class="tabs" id="tabs"></div>
+    <button class="legend-pill" id="legendPill">📖 legend ▾</button>
+    <button class="branch-pill">🌿1 ▾</button>
+    <div class="legend-drop" id="legendDrop">
+      <div class="ld-head"><span>📖 Legend</span><span class="spacer"></span>
+        <span id="ctxPill" style="color:var(--muted);text-transform:none;letter-spacing:0;font-size:13px">idle</span>
+      </div>
+      <div class="ctx-switch" id="ctxSwitch">
+        <button data-ctx="idle" class="active">idle</button>
+        <button data-ctx="reply">reply</button>
+        <button data-ctx="summary">summary</button>
+      </div>
+      <div class="legend-list" id="legendBody"></div>
+    </div>
+  </div>
+
+  <div class="leftbar">
+    <div class="lb-section">Token budget</div>
+    <div class="master-slider">
+      <div class="head">
+        <span class="label">Master</span>
+        <button class="lock-btn" id="masterLock" title="Lock — all sliders move together">🔒</button>
+        <span class="spacer"></span>
+        <span class="val" id="masterVal">600 tok</span>
+      </div>
+      <input type="range" id="masterSlider" min="100" max="1000" step="50" value="600">
+    </div>
+    <div class="trio-toggle" id="trioToggle">
+      <div class="sw"></div>
+      <span>∞ for 🌊4 · 🔭8 · 💠6</span>
+    </div>
+    <div class="lb-section">Models</div>
+    <div id="llmList"></div>
+  </div>
+
+  <div class="center">
+    <div class="wrap" id="convWrap"></div>
+  </div>
+
+  <div class="bottom">
+    <div class="bottom-inner">
+      <div class="history">
+        <div class="hs-head">
+          <span>📜 History</span><span class="spacer"></span>
+          <span class="meta" id="hsMeta">1 of 2 turns included</span>
+        </div>
+        <div class="hs-row">
+          <div class="hs-preview" id="hsPreview"></div>
+          <div class="hs-track">
+            <input type="range" id="hsRange" min="0" max="2" value="1">
+          </div>
+        </div>
+        <div class="hs-stats">
+          <span>Depth: <strong id="hsDepth">1 turn</strong></span>
+          <span>Context: <strong id="hsTok">0 tok</strong></span>
+          <span>Next send: <strong id="hsNext">~0.0s</strong></span>
+        </div>
+      </div>
+
+      <textarea id="masterText" placeholder="Type once. Sliders set length. Prefixes get prepended on send."></textarea>
+
+      <div class="toolbar">
+        <button class="primary" id="sendBtn">⚡</button>
+        <button>🔄</button>
+        <button>Sync</button>
+        <button class="toggle on">✨</button>
+        <button>🪟</button>
+        <button class="toggle free" id="freeBtn">🆓</button>
+        <button>⚙</button>
+      </div>
+
+      <div class="statusbar">
+        <span class="sb-prompt" id="sbPrompt">✎ Master</span>
+        <span class="sb-timer" id="sbTimer">est. next send: ~4.8s</span>
+        <span class="sb-status" id="sbStatus">idle</span>
+        <div class="sb-progress" id="sbProgress" style="display:none">
+          <div class="fill" id="sbFill" style="width:0%"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const CH = [
+    { id:'chatgpt',    emoji:'🤖1', name:'ChatGPT',    checked:true,  maxTokens:600, prefixOn:true, style:'balanced, conversational',    tps:80,  ttft:0.4 },
+    { id:'claude',     emoji:'🎭2', name:'Claude',     checked:true,  maxTokens:600, prefixOn:true, style:'concise, direct, no preamble', tps:75,  ttft:0.4 },
+    { id:'gemini',     emoji:'♊3', name:'Gemini',     checked:true,  maxTokens:600, prefixOn:true, style:'structured, comprehensive',    tps:195, ttft:0.5 },
+    { id:'deepseek',   emoji:'🌊4', name:'DeepSeek',   checked:true,  maxTokens:600, prefixOn:true, style:'technical, code-friendly',     tps:110, ttft:0.4 },
+    { id:'grok',       emoji:'🌌5', name:'Grok',       checked:false, maxTokens:600, prefixOn:true, style:'witty, unfiltered',            tps:90,  ttft:0.5 },
+    { id:'meta',       emoji:'💠6', name:'Meta AI',    checked:false, maxTokens:600, prefixOn:true, style:'casual, socially aware',       tps:85,  ttft:0.5 },
+    { id:'copilot',    emoji:'🛩️7', name:'Copilot',    checked:false, maxTokens:600, prefixOn:false,style:'professional',                 tps:70,  ttft:0.6 },
+    { id:'perplexity', emoji:'🔭8', name:'Perplexity', checked:false, maxTokens:600, prefixOn:false,style:'research-focused with sources', tps:60,  ttft:0.8 },
+    { id:'google',    emoji:'🔍9', name:'Google AI',  checked:true,  maxTokens:600, prefixOn:true, style:'AI Mode', tps:100, ttft:0.5 },
+    { id:'brave',     emoji:'🦁0', name:'Brave',     checked:false, maxTokens:600, prefixOn:true, style:'Search AI', tps:100, ttft:0.5 },
+  ];
+  const HYB = '🪟';
+
+  function tierFor(t) {
+    if (t >= 1000) return 'max';
+    if (t <= 150) return 'tiny';
+    if (t <= 250) return 'short';
+    if (t <= 400) return 'para';
+    if (t <= 550) return 'two';
+    if (t <= 700) return 'few';
+    if (t <= 850) return 'multi';
+    return 'long';
+  }
+  const TIER_TEXT = {
+    tiny:'One sentence. No elaboration.', short:'2-3 sentences.',
+    para:'One short paragraph.', two:'1-2 paragraphs.',
+    few:'3-4 paragraphs.', multi:'Multi-paragraph with structure.',
+    long:'Comprehensive with headers.',
+    max:'Comprehensive, structured, examples welcome.',
+  };
+  function prefixFor(ch) { return `${ch.style}. ${TIER_TEXT[tierFor(ch.maxTokens)]} `; }
+
+  function parseScore(raw) {
+    const m = raw.match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*10/i);
+    const r = raw.match(/REASON:\s*(.+?)(?:\n|$)/i);
+    return { score: m ? parseFloat(m[1]) : null, reason: r ? r[1].trim() : '' };
+  }
+  function stripScore(raw) { return raw.replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
+
+  let linked = false;
+
+  function renderLeft() {
+    const list = document.getElementById('llmList');
+    list.innerHTML = '';
+    CH.forEach(ch => {
+      const row = document.createElement('div');
+      row.className = 'llm-row' + (ch.checked ? '' : ' off');
+      const tokText = ch.maxTokens >= 1000 ? '∞' : ch.maxTokens;
+      row.innerHTML = `
+        <div class="llm-head">
+          <input type="checkbox" ${ch.checked ? 'checked' : ''}>
+          <span class="llm-emoji">${ch.emoji}</span>
+          <span class="llm-name">${ch.name}</span>
+          <span class="llm-tok ${ch.maxTokens >= 1000 ? 'unl' : ''}">${tokText}</span>
+          <button class="llm-tog ${ch.prefixOn ? 'on' : ''}" title="Prepend prefix on send">✨</button>
+        </div>
+        <input type="range" min="100" max="1000" step="50" value="${ch.maxTokens}">
+        <div class="prefix">↳ ${prefixFor(ch)}</div>
+      `;
+      row.onclick = (e) => {
+        if (e.target.closest('input[type="range"]')
+          || e.target.closest('.llm-tog')) return;
+        ch.checked = !ch.checked;
+        renderLeft();
+      };
+      row.querySelector('.llm-tog').onclick = (e) => {
+        e.stopPropagation(); ch.prefixOn = !ch.prefixOn; renderLeft();
+      };
+      const slider = row.querySelector('input[type="range"]');
+      slider.onclick = e => e.stopPropagation();
+      slider.oninput = () => {
+        ch.maxTokens = parseInt(slider.value);
+        if (linked) CH.forEach(c => c.maxTokens = ch.maxTokens);
+        renderLeft(); updateHistory(); updateTimer();
+      };
+      list.appendChild(row);
+    });
+  }
+
+  const masterLock = document.getElementById('masterLock');
+  masterLock.onclick = (e) => {
+    e.stopPropagation();
+    linked = !linked;
+    masterLock.classList.toggle('on', linked);
+    masterLock.title = linked ? 'Unlock — individual sliders move independently' : 'Lock — all sliders move together';
+  };
+
+  const masterSlider = document.getElementById('masterSlider');
+  const masterVal = document.getElementById('masterVal');
+  masterSlider.oninput = () => {
+    const v = parseInt(masterSlider.value);
+    masterVal.textContent = v >= 1000 ? '∞' : v + ' tok';
+    CH.forEach(c => c.maxTokens = v);
+    renderLeft(); updateHistory(); updateTimer();
+  };
+
+  const trio = document.getElementById('trioToggle');
+  let trioOn = false;
+  trio.onclick = () => {
+    trioOn = !trioOn;
+    trio.classList.toggle('on', trioOn);
+    ['deepseek','perplexity','meta'].forEach(id => {
+      const c = CH.find(x => x.id === id);
+      if (c) c.maxTokens = trioOn ? 1000 : 600;
+    });
+    renderLeft(); updateHistory(); updateTimer();
+  };
+
+  const turns = [
+    {
+      n: 1,
+      prompt: 'Explain quantum entanglement to a curious adult.',
+      replies: {
+        chatgpt: 'Quantum entanglement is when two particles become linked such that measuring one instantly determines the state of the other, no matter the distance.\n\nSCORE: 8/10\nREASON: Solid definition, but skipped the "not a signal" caveat.',
+        claude: 'Entanglement means two particles share a single quantum state. Their properties are correlated in ways that classical physics cannot explain.\n\nSCORE: 9/10\nREASON: Accurate and concise; the "classical physics cannot explain" line is precise.',
+        gemini: 'Quantum entanglement is a phenomenon where particles interact so that the quantum state of each cannot be described independently.\n\nSCORE: 7/10\nREASON: Textbook correct but no intuition-building.',
+        deepseek: 'Entanglement: two systems share a joint quantum state that cannot be factored into product states. Measurement outcomes correlate beyond classical bounds (Bell inequality violations).\n\nSCORE: 8/10\nREASON: Precise, but assumes the reader knows what a product state is.',
+      },
+      order: ['chatgpt','claude','gemini','deepseek'],
+      times: { chatgpt:0.8, claude:1.2, gemini:0.6, deepseek:1.4 },
+      hybrid: {
+        text: 'Entanglement is a quantum link between two particles. Once linked, measuring one tells you about the other — regardless of distance. It is not a signal; it is a correlation that exceeds any classical explanation.',
+        sources: ['chatgpt','claude','deepseek'],
+        omitted: { gemini: 'redundant with chatgpt' },
+        score: 78, reason: 'Strong synthesis; tone could be warmer for the stated audience.',
+      },
+    },
+    {
+      n: 2,
+      prompt: 'Now explain it to a 10-year-old.',
+      replies: {
+        chatgpt: 'Imagine two magic coins. Whenever one lands heads, the other always lands tails — no matter how far apart they are.\n\nSCORE: 9/10\nREASON: The coin metaphor is perfect for this age; simple and accurate.',
+        claude: 'Two magic coins. Flip one, it\'s heads. The other, even across the world, is tails. They\'re linked like that forever.\n\nSCORE: 9/10\nREASON: Clean, brief, and the "linked forever" line lands well.',
+        gemini: 'Picture two best-friend coins. Whenever one smiles, the other smiles too. Even if one is on Earth and one is on Mars.\n\nSCORE: 6/10\nREASON: The smile metaphor is confusing — coins don\'t smile.',
+        deepseek: 'Two dice that always match when rolled. Separated by any distance.\n\nSCORE: 7/10\nREASON: Accurate but a bit dry for a 10-year-old.',
+      },
+      order: ['chatgpt','claude','gemini','deepseek'],
+      times: { chatgpt:0.7, claude:0.9, gemini:0.5, deepseek:1.1 },
+      hybrid: {
+        text: 'Imagine two magic coins. Whenever one lands heads, the other lands tails. Always. Even if one coin is on Earth and the other is on Mars. They\'re not sending messages to each other — they\'re just linked.',
+        sources: ['chatgpt','claude'],
+        omitted: { gemini: 'metaphor drifted', deepseek: 'too terse' },
+        score: 84, reason: 'Strong analogy, correct framing, age-appropriate.',
+      },
+    },
+  ];
+
+  let activeTab = 'hybrid';
+  const openState = {};
+  const isOpen = (t, id) => !!openState[t.n + ':' + id];
+  const setOpen = (t, id, v) => { openState[t.n + ':' + id] = v; };
+
+  function channelsUsed() {
+    const used = new Set();
+    turns.forEach(t => {
+      Object.keys(t.replies || {}).forEach(id => used.add(id));
+      if (t.hybrid) {
+        t.hybrid.sources.forEach(id => used.add(id));
+        Object.keys(t.hybrid.omitted || {}).forEach(id => used.add(id));
+      }
+    });
+    return used;
+  }
+  function renderTabs() {
+    const tabs = document.getElementById('tabs');
+    tabs.innerHTML = '';
+    const used = channelsUsed();
+    const h = document.createElement('button');
+    h.className = 'tab' + (activeTab === 'hybrid' ? ' active' : '');
+    h.textContent = HYB;
+    h.onclick = () => { activeTab = 'hybrid'; renderAll(); };
+    tabs.appendChild(h);
+    CH.forEach(ch => {
+      if (!used.has(ch.id)) return;
+      const b = document.createElement('button');
+      b.className = 'tab' + (ch.id === activeTab ? ' active' : '');
+      b.textContent = ch.emoji; b.title = ch.name;
+      b.onclick = () => { activeTab = ch.id; renderAll(); };
+      tabs.appendChild(b);
+    });
+  }
+
+  function scoreClass(pct) { return pct >= 80 ? '' : pct >= 50 ? 'mid' : 'low'; }
+
+  function renderConv() {
+    const wrap = document.getElementById('convWrap');
+    wrap.innerHTML = '';
+    const depth = parseInt(document.getElementById('hsRange').value);
+    turns.forEach((t, idx) => {
+      const inCtx = idx < depth;
+      const el = document.createElement('div');
+      el.className = 'turn' + (inCtx ? ' in-ctx' : '');
+
+      const head = document.createElement('div');
+      head.className = 'turn-head';
+      head.innerHTML = `<span class="tnum">▶ T${t.n}</span>
+        <span>·</span>
+        <span>${t.prompt.slice(0, 60)}${t.prompt.length > 60 ? '…' : ''}</span>
+        ${inCtx ? '<span style="color:var(--accent);font-size:11px">· in context</span>' : ''}
+        <button class="log-btn" title="Channel log">📜</button>`;
+      el.appendChild(head);
+
+      const p = document.createElement('div');
+      p.className = 'prompt-card';
+      p.innerHTML = '<div class="who">You</div>';
+      p.appendChild(document.createTextNode(t.prompt));
+      el.appendChild(p);
+
+      if (activeTab === 'hybrid' && t.hybrid) {
+        const card = document.createElement('div');
+        card.className = 'hybrid-card';
+
+        const lbl = document.createElement('div');
+        lbl.className = 'hybrid-label';
+        lbl.textContent = `${HYB} Hybrid`;
+        card.appendChild(lbl);
+
+        const body = document.createElement('div');
+        body.className = 'hybrid-body';
+        body.textContent = t.hybrid.text;
+        card.appendChild(body);
+
+        const sb = document.createElement('div');
+        sb.className = 'score-bar ' + scoreClass(t.hybrid.score);
+        sb.innerHTML = `<span class="pct">🎯 ${t.hybrid.score}%</span>
+          <span class="reason">${t.hybrid.reason}</span>`;
+        sb.onclick = (e) => { e.stopPropagation(); sb.classList.toggle('open'); };
+        card.appendChild(sb);
+
+        const bar = document.createElement('div');
+        bar.className = 'source-bar';
+
+        const emojiButtons = t.order.map(id => {
+          const ch = CH.find(x => x.id === id);
+          const omitted = t.hybrid.omitted && t.hybrid.omitted[id];
+          const isSrc = t.hybrid.sources.includes(id);
+          const cls = 'src-emoji'
+            + (isOpen(t, id) ? ' on' : '')
+            + (omitted ? ' omitted' : '')
+            + (!isSrc && !omitted ? ' omitted' : '');
+          return `<button class="${cls}" data-id="${id}" title="${ch.name}${omitted ? ' — omitted: ' + omitted : ''}">${ch.emoji}</button>`;
+        }).join('');
+
+        bar.innerHTML = `${emojiButtons}
+          <span class="spacer"></span>
+          <button class="bar-act" data-act="sources">⊞ view sources</button>
+          <button class="bar-act" data-act="all">⊞ expand all</button>`;
+
+        bar.querySelectorAll('.src-emoji').forEach(btn => {
+          btn.onclick = (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            setOpen(t, id, !isOpen(t, id));
+            renderConv();
+          };
+        });
+        bar.querySelector('[data-act="sources"]').onclick = (e) => {
+          e.stopPropagation();
+          t.hybrid.sources.forEach(id => setOpen(t, id, true));
+          renderConv();
+        };
+        bar.querySelector('[data-act="all"]').onclick = (e) => {
+          e.stopPropagation();
+          const anyClosed = t.order.some(id => !isOpen(t, id));
+          t.order.forEach(id => setOpen(t, id, anyClosed));
+          renderConv();
+        };
+        bar.onclick = (e) => {
+          if (e.target.closest('.src-emoji') || e.target.closest('.bar-act')) return;
+          const anyClosed = t.order.some(id => !isOpen(t, id));
+          t.order.forEach(id => setOpen(t, id, anyClosed));
+          renderConv();
+        };
+        card.appendChild(bar);
+
+        t.order.forEach(id => {
+          const ch = CH.find(x => x.id === id);
+          if (!ch) return;
+          const raw = t.replies[id];
+          if (!raw) return;
+          const parsed = parseScore(raw);
+          const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
+          const body = stripScore(raw);
+
+          const sr = document.createElement('div');
+          sr.className = 'src-reply' + (isOpen(t, id) ? ' open' : '');
+          const head2 = document.createElement('div');
+          head2.className = 'src-head';
+          head2.innerHTML = `<span>${ch.emoji} ${ch.name}</span>
+            <span class="time">${(t.times[id]||0).toFixed(1)}s</span>
+            ${pct != null ? `<span class="pct ${scoreClass(pct)}">🎯 ${pct}%</span>` : ''}`;
+          sr.appendChild(head2);
+          sr.appendChild(document.createTextNode(body));
+          if (parsed.reason) {
+            const rr = document.createElement('div');
+            rr.className = 'src-reason';
+            rr.textContent = parsed.reason;
+            sr.appendChild(rr);
+          }
+          card.appendChild(sr);
+        });
+
+        el.appendChild(card);
+      }
+
+      if (activeTab !== 'hybrid') {
+        const raw = t.replies[activeTab];
+        if (raw) {
+          const parsed = parseScore(raw);
+          const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
+          const body = stripScore(raw);
+          const card = document.createElement('div');
+          card.className = 'hybrid-card';
+          const head3 = document.createElement('div');
+          head3.className = 'hybrid-label';
+          head3.textContent = (CH.find(c => c.id === activeTab) || {}).emoji + ' ' + (CH.find(c => c.id === activeTab) || {}).name;
+          card.appendChild(head3);
+          const bd = document.createElement('div');
+          bd.className = 'hybrid-body';
+          bd.textContent = body;
+          card.appendChild(bd);
+          if (pct != null) {
+            const sb = document.createElement('div');
+            sb.className = 'score-bar ' + scoreClass(pct);
+            sb.innerHTML = `<span class="pct">🎯 ${pct}%</span>
+              <span class="reason">${parsed.reason}</span>`;
+            sb.onclick = (e) => { e.stopPropagation(); sb.classList.toggle('open'); };
+            card.appendChild(sb);
+          }
+          el.appendChild(card);
+        }
+      }
+
+      wrap.appendChild(el);
+    });
+  }
+
+  const hsRange = document.getElementById('hsRange');
+  const hsPreview = document.getElementById('hsPreview');
+  const hsDepth = document.getElementById('hsDepth');
+  const hsTok = document.getElementById('hsTok');
+  const hsMeta = document.getElementById('hsMeta');
+  const hsNext = document.getElementById('hsNext');
+
+  // 3. TOKEN & TIME ESTIMATION LOGIC (See section 5 below)
+  const est = s => Math.ceil((s || '').length / 4);
+  function turnTok(t) {
+    let n = est(t.prompt);
+    Object.values(t.replies || {}).forEach(r => n += est(r));
+    if (t.hybrid) n += est(t.hybrid.text);
+    return n;
+  }
+  function tokUpTo(d) { return turns.slice(0, d).reduce((s, t) => s + turnTok(t), 0); }
+
+  function updateHistory() {
+    const d = parseInt(hsRange.value);
+    if (d === 0) {
+      hsPreview.innerHTML = `<strong>0:</strong> fresh — no prior context`;
+      hsDepth.textContent = '0 turns';
+    } else {
+      const last = turns[d - 1];
+      hsPreview.innerHTML = `<strong>T${d}:</strong> "${last.prompt.slice(0, 60)}${last.prompt.length > 60 ? '…' : ''}"`;
+      hsDepth.textContent = d + ' turn' + (d === 1 ? '' : 's');
+    }
+    hsTok.textContent = tokUpTo(d) + ' tok';
+    hsMeta.textContent = d === 0 ? `0 of ${turns.length} — fresh` : `${d} of ${turns.length} in context`;
+    hsNext.textContent = '~' + estimateSend().toFixed(1) + 's';
+    renderConv();
+  }
+  hsRange.oninput = updateHistory;
+
+  const sbTimer = document.getElementById('sbTimer');
+  const sbStatus = document.getElementById('sbStatus');
+  const sbProgress = document.getElementById('sbProgress');
+  const sbFill = document.getElementById('sbFill');
+
+  let inflight = null, ticker = null;
+  function estimateSend() {
+    const depth = parseInt(hsRange.value);
+    const ctxTok = tokUpTo(depth);
+    const active = CH.filter(c => c.checked);
+    let worst = 0;
+    active.forEach(c => {
+      const budget = c.maxTokens >= 1000 ? 1000 : c.maxTokens;
+      worst = Math.max(worst, c.ttft + budget / c.tps + ctxTok / 2000);
+    });
+    return worst;
+  }
+  function updateTimer() {
+    if (inflight) return;
+    sbTimer.textContent = `est. next send: ~${estimateSend().toFixed(1)}s`;
+    sbTimer.classList.remove('done');
+  }
+  function startSend() {
+    const active = CH.filter(c => c.checked);
+    const estSec = estimateSend();
+    inflight = { start: Date.now(), est: estSec, total: active.length, left: active.length };
+    sbStatus.textContent = `sending to ${active.length}`;
+    sbProgress.style.display = 'block';
+    if (ticker) clearInterval(ticker);
+    ticker = setInterval(tick, 100);
+  }
+  function tick() {
+    if (!inflight) return;
+    const elapsed = (Date.now() - inflight.start) / 1000;
+    const left = Math.max(0, inflight.est - elapsed);
+    sbFill.style.width = Math.min(100, (elapsed / inflight.est) * 100) + '%';
+    sbTimer.textContent = left > 0 ? `${left.toFixed(1)}s left` : 'finishing…';
+    sbStatus.textContent = `${inflight.total - inflight.left}/${inflight.total} done · ${elapsed.toFixed(1)}s`;
+    if (Math.random() < 0.03 && inflight.left > 0) inflight.left--;
+    if (inflight.left === 0) {
+      clearInterval(ticker); ticker = null;
+      sbTimer.classList.add('done');
+      sbTimer.textContent = `✓ done in ${elapsed.toFixed(1)}s`;
+      sbStatus.textContent = `${inflight.total} replies`;
+      setTimeout(() => {
+        inflight = null; sbProgress.style.display = 'none';
+        sbFill.style.width = '0%'; sbStatus.textContent = 'idle'; updateTimer();
+      }, 2600);
+    }
+  }
+
+  const LEGENDS = {
+    idle: [
+      ['🤖1','ChatGPT'],['🎭2','Claude'],['♊3','Gemini'],['🌊4','DeepSeek'],
+      ['🌌5','Grok'],['💠6','Meta AI'],['🛩️7','Copilot'],['🔭8','Perplexity'],
+      ['🪟','Hybrid'],['🌿','Branch'],['▶','Turn'],
+      ['🔒','Master lock'],['🎯','Score bar'],['✨','Prefix prepend'],
+      ['⊞','Expand all replies'],
+    ],
+    reply: [
+      ['🎯','Score bar — click to expand reason'],
+      ['🤖1','Click any emoji to toggle that reply below'],
+      ['⊞ view sources','Open only the hybrid\'s contributing replies'],
+      ['⊞ expand all','Toggle every reply in the turn'],
+      ['⊘','Omitted replies shown dimmed in the bar'],
+      ['📜','Channel log & timings'],
+    ],
+    summary: [
+      ['🆓','Open summary bench'],
+      ['⚡','Groq'],['🌬️','Mistral'],['🟩','NVIDIA NIM'],['🧠','Cerebras'],
+      ['🔄','OpenRouter free'],['🐘','HuggingFace'],['♊3','Gemini Studio'],
+      ['🕊️','Pollinations (no key)'],
+    ],
+  };
+  function setLegendContext(c) {
+    document.getElementById('ctxPill').textContent = c;
+    document.querySelectorAll('#ctxSwitch button').forEach(b => {
+      b.classList.toggle('active', b.dataset.ctx === c);
+    });
+    document.getElementById('legendBody').innerHTML = LEGENDS[c]
+      .map(([i, t]) => `<div class="legend-item"><span class="ico">${i}</span><span class="txt">${t}</span></div>`)
+      .join('');
+  }
+  document.querySelectorAll('#ctxSwitch button').forEach(b => {
+    b.onclick = (e) => { e.stopPropagation(); setLegendContext(b.dataset.ctx); };
+  });
+
+  const legendPill = document.getElementById('legendPill');
+  const legendDrop = document.getElementById('legendDrop');
+  legendPill.onclick = (e) => {
+    e.stopPropagation();
+    legendDrop.classList.toggle('open');
+    legendPill.classList.toggle('open');
+  };
+  document.addEventListener('click', (e) => {
+    if (!legendDrop.contains(e.target) && e.target !== legendPill) {
+      legendDrop.classList.remove('open'); legendPill.classList.remove('open');
+    }
+  });
+
+  document.getElementById('sendBtn').onclick = startSend;
+  document.getElementById('freeBtn').onclick = (e) => {
+    e.currentTarget.classList.toggle('on');
+    sbStatus.textContent = e.currentTarget.classList.contains('on') ? '🆓 summary bench' : 'idle';
+    if (e.currentTarget.classList.contains('on')) setLegendContext('summary');
+  };
+
+  function renderAll() { renderTabs(); renderConv(); }
+  renderLeft(); renderAll(); updateHistory(); updateTimer();
+  setLegendContext('idle');
+
+    // ==========================================
+    // --- ELECTRON INTEGRATION BRIDGE ---
+    // ==========================================
+
+    // 1. Hook up the Send Button
+    const sendBtn = document.getElementById('sendBtn');
+    const promptInput = document.getElementById('masterText') || document.querySelector('textarea'); // Adjusts to your new UI
+
+    if (sendBtn && promptInput) {
+      sendBtn.addEventListener('click', () => {
+        const promptText = promptInput.value;
+        if (!promptText.trim()) return;
+        
+        // Send the prompt to the Electron Main process (which triggers Playwright)
+        window.api.sendPrompt(promptText);
+        
+        // Optional: Disable the button or show a loading state here if you want
+        // sendBtn.disabled = true;
+      });
+    }
+
+        // 2. Listen for individual LLM replies (from Google and Brave)
+    window.api.onReplyReceived((data) => {
+      const currentTurn = turns[turns.length - 1];
+      if (currentTurn) {
+        // Add the text to the UI data model
+        if (data.text) currentTurn.replies[data.model] = data.text;
+        
+        // Add to order if it's not there
+        if (!currentTurn.order.includes(data.model)) {
+           currentTurn.order.push(data.model);
+        }
+
+        // Update the hybrid status
+        currentTurn.hybrid.text = "Synthesizing...";
+        currentTurn.hybrid.reason = "Running local OpenVINO model...";
+        
+        // Re-render to show the colored box lighting up
+        renderAll(); 
+      }
+    });
+
+    // 3. Listen for the Hybrid OpenVINO stream
+    window.api.onHybridStream((chunk) => {
+      // Find the main chat area in your new UI where the hybrid text should appear
+      // (Adjust this selector to match your new design)
+      const hybridOutput = document.getElementById('convWrap') || document.getElementById('hybrid-output');
+      
+      if (hybridOutput) {
+        // If it's the first chunk, clear the area
+        if (hybridOutput.innerHTML === 'Waiting...') hybridOutput.innerHTML = '';
+        
+        // Create a text node so it streams naturally
+        const textNode = document.createTextNode(chunk);
+        hybridOutput.appendChild(textNode);
+        
+        // Auto-scroll to bottom
+        hybridOutput.scrollTop = hybridOutput.scrollHeight;
+      }
+    });
+
+    // ==========================================
+    // --- LIVE ELECTRON INTEGRATION ---
+    // ==========================================
+
+    // 1. Override the Send Button
+    document.getElementById('sendBtn').onclick = () => {
+      const promptText = document.getElementById('masterText').value;
+      if (!promptText.trim()) return;
+
+      // Create a new live turn object that matches your UI's data structure
+      const newTurn = {
+        n: turns.length + 1,
+        prompt: promptText,
+        replies: {},
+        order: ['google'], // The model we are currently scraping
+        times: {},
+        hybrid: { text: "Waiting for LLMs...", sources: ['google'], score: 0, reason: "" }
+      };
+
+      // Push it to your UI's global state and re-render
+      turns.push(newTurn);
+      document.getElementById('masterText').value = '';
+      renderAll(); 
+      updateTimer(); // Starts your cool visual timer animation
+
+      // Send to the Playwright backend
+      window.api.sendPrompt(promptText);
+    };
+
+    // 2. Listen for individual LLM replies (from Google/Playwright)
+    window.api.onReplyReceived((data) => {
+      const currentTurn = turns[turns.length - 1];
+      if (currentTurn) {
+        // Add the text to the UI data model
+        currentTurn.replies[data.model] = data.text;
+        
+        // Update the hybrid status
+        currentTurn.hybrid.text = "Synthesizing...";
+        currentTurn.hybrid.reason = "Running local OpenVINO model...";
+        
+        // Re-render to show the colored box lighting up
+        renderAll(); 
+      }
+    });
+
+        // 3. Listen for the Hybrid OpenVINO Stream
+    window.api.onHybridStream((chunk) => {
+      const currentTurn = turns[turns.length - 1];
+      if (currentTurn && currentTurn.hybrid) {
+        
+        // Clear the loading text on the first chunk
+        if (currentTurn.hybrid.text.includes("Running local OpenVINO") || currentTurn.hybrid.text === "Synthesizing...") {
+          currentTurn.hybrid.text = "";
+        }
+        
+        currentTurn.hybrid.text += chunk;
+        
+        // Find the LAST hybrid body in the DOM to prevent duplicates
+        const hybridBodies = document.querySelectorAll('.hybrid-body');
+        if (hybridBodies.length > 0) {
+          const lastBody = hybridBodies[hybridBodies.length - 1];
+          lastBody.textContent = currentTurn.hybrid.text;
+          
+          // Auto-scroll
+          const centerPanel = document.querySelector('.center');
+          if (centerPanel) centerPanel.scrollTop = centerPanel.scrollHeight;
+        }
+      }
+    });
+
+    // 4. Listen for when OpenVINO finishes completely
+    window.api.onHybridComplete(() => {
+      const currentTurn = turns[turns.length - 1];
+      if (currentTurn) {
+        // Update the UI data model to clear the 0% and loading text
+        currentTurn.hybrid.score = 100; 
+        currentTurn.hybrid.reason = "Synthesis Complete";
+        
+        // Re-render just the score bar
+        const scoreBars = document.querySelectorAll('.score-bar');
+        if (scoreBars.length > 0) {
+          const lastScoreBar = scoreBars[scoreBars.length - 1];
+          lastScoreBar.className = 'score-bar'; // Removes red/mid classes
+          lastScoreBar.innerHTML = `<span class="pct">🎯 100%</span><span class="reason">Synthesis Complete</span>`;
+        }
+      }
+    });
+
+</script>
+</body>
+</html>
