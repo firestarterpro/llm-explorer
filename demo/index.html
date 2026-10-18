@@ -4,7 +4,6 @@
 <meta charset="utf-8">
 <title>LLM Explorer — Live Demo</title>
 <style>
-  /* [Keep all your exact same CSS from index.html here] */
   :root {
     --bg:#0f1115; --panel:#171a21; --panel-2:#1d2129; --border:#2a2f3a;
     --text:#e6e8ee; --muted:#8a92a6; --accent:#6ea8fe; --accent-2:#4f7dd6;
@@ -20,6 +19,7 @@
     grid-template-rows: auto 1fr auto;
     grid-template-areas: "top top" "left center" "bottom bottom"; }
 
+  /* ---- Top ---- */
   .topbar { grid-area: top; display:flex; align-items:flex-end; gap:8px;
     padding:6px 10px 0; border-bottom:1px solid var(--border); background:var(--panel);
     position:relative; }
@@ -55,6 +55,7 @@
   .legend-drop .legend-item .ico { min-width:24px; font-size:16px; text-align:center; }
   .legend-drop .legend-item .txt { color:var(--muted); line-height:1.4; }
 
+  /* ---- Left ---- */
   .leftbar { grid-area: left; border-right:1px solid var(--border);
     background:var(--panel); padding:10px; overflow-y:auto;
     display:flex; flex-direction:column; gap:10px; }
@@ -114,6 +115,7 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     padding-top:4px; border-top:1px dashed var(--border); }
 
+  /* ---- Center ---- */
   .center { grid-area: center; overflow-y:auto; padding:18px 24px; }
   .wrap { max-width:900px; margin:0 auto; }
   .turn { margin-bottom:22px; border-left:2px solid transparent;
@@ -188,6 +190,7 @@
   .src-reply .src-reason { font-size:12px; color:var(--muted);
     margin-top:7px; padding-top:6px; border-top:1px dashed var(--border); }
 
+  /* ---- Bottom ---- */
   .bottom { grid-area: bottom; border-top:1px solid var(--border);
     background:var(--panel); padding:10px 14px;
     display:flex; flex-direction:column; gap:7px; }
@@ -250,20 +253,29 @@
 
   /* DEMO SPECIFIC STYLES */
   .tour-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000;
     display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(2px);
+    backdrop-filter: blur(3px);
   }
   .tour-box {
     background: var(--panel-2); border: 2px solid var(--accent);
-    border-radius: 12px; padding: 24px; max-width: 400px; text-align: center;
+    border-radius: 12px; padding: 24px; max-width: 450px; text-align: center;
     box-shadow: 0 20px 50px rgba(0,0,0,0.8);
   }
-  .tour-box h2 { color: var(--accent); margin-top: 0; }
-  .tour-box p { color: var(--text); margin-bottom: 20px; line-height: 1.6; }
+  .tour-box h2 { color: var(--accent); margin-top: 0; font-size: 20px; }
+  .tour-box p { color: var(--text); margin-bottom: 20px; line-height: 1.6; font-size: 15px; }
   .tour-btn {
     background: var(--accent); color: #fff; border: none; padding: 10px 20px;
     border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;
+    transition: background 0.2s;
+  }
+  .tour-btn:hover { background: var(--accent-2); }
+  
+  .tour-highlight {
+    box-shadow: 0 0 0 4px var(--accent) !important;
+    z-index: 900;
+    position: relative;
+    background-color: var(--bg) !important;
   }
 </style>
 </head>
@@ -279,11 +291,11 @@
 </div>
 
 <div class="app">
-  <div class="topbar">
+  <div class="topbar" id="tourTopbar">
     <div class="tabs" id="tabs"></div>
     
-    <button style="padding: 6px 10px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🔐 Login Mode (Disabled in Demo)</button>
-    <button style="padding: 6px 10px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🗑️ New Chat (Disabled in Demo)</button>
+    <button style="padding: 6px 10px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🔐 Login (Disabled)</button>
+    <button style="padding: 6px 10px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🗑️ New Chat (Disabled)</button>
 
     <button class="legend-pill" id="legendPill">📖 legend ▾</button>
     <button class="branch-pill">🌿1 ▾</button>
@@ -325,7 +337,7 @@
 
   <div class="bottom" id="tourBottom">
     <div class="bottom-inner">
-      <div class="history">
+      <div class="history" id="tourHistory">
         <div class="hs-head">
           <span>📜 History</span><span class="spacer"></span>
           <span class="meta" id="hsMeta">0 of 0 turns included</span>
@@ -345,7 +357,7 @@
 
       <textarea id="masterText" placeholder="Follow the tour steps..."></textarea>
 
-      <div class="toolbar">
+      <div class="toolbar" id="tourToolbar">
         <button class="primary" id="sendBtn">⚡</button>
         <button>🔄</button>
         <button>Sync</button>
@@ -355,7 +367,7 @@
         <button>⚙</button>
       </div>
 
-      <div class="statusbar">
+      <div class="statusbar" id="tourStatus">
         <span class="sb-prompt" id="sbPrompt">✎ Master</span>
         <span class="sb-timer" id="sbTimer">est. next send: ~4.8s</span>
         <span class="sb-status" id="sbStatus">idle</span>
@@ -368,7 +380,7 @@
 </div>
 
 <script>
-  // --- MOCK DATA FOR ALL 10 SERVICES ---
+  // --- MOCK DATA ---
   const MOCK_RESPONSES = {
     "what does this tool do?": {
       long: {
@@ -840,7 +852,14 @@
     }
   });
 
-  function renderAll() { renderTabs(); renderConv(); }
+  function renderAll() { 
+    if (turns.length > 0) {
+      hsRange.max = turns.length;
+      if (parseInt(hsRange.value) > turns.length) hsRange.value = turns.length;
+    }
+    renderTabs(); 
+    renderConv(); 
+  }
   renderLeft(); renderAll(); updateHistory(); updateTimer();
   setLegendContext('idle');
 
@@ -854,33 +873,41 @@
   const tourText = document.getElementById('tourText');
   const tourNextBtn = document.getElementById('tourNextBtn');
   
-  function highlight(elId) {
+  function clearHighlights() {
     document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
-    if(elId) {
-       const el = document.getElementById(elId);
-       if(el) el.style.boxShadow = "0 0 0 4px var(--accent)";
-    }
   }
 
   tourNextBtn.onclick = () => {
     tourStep++;
+    clearHighlights();
+
     if(tourStep === 1) {
-      tourTitle.textContent = "1. Select Your AI Models";
-      tourText.textContent = "On the left, you can check up to 10 different AI models. For this demo, Brave and Google AI are selected.";
-      highlight('tourLeftbar');
+      tourTitle.textContent = "1. Model Selection";
+      tourText.textContent = "On the left, select which AIs to query. Check the box to include them. Drag the slider to set token limits (∞ means a full detailed response). Click the ✨ to toggle prefixes.";
+      document.getElementById('llmList').classList.add('tour-highlight');
     } else if (tourStep === 2) {
-      tourTitle.textContent = "2. Set the Token Budget";
-      tourText.textContent = "Notice the sliders. If you drag them down, the AI gives a very short answer. If you leave them on ∞, it gives a full, detailed response.";
-      highlight('tourLeftbar');
+      tourTitle.textContent = "2. Top Bar Controls";
+      tourText.textContent = "The 📖 Legend explains the UI icons. The 🌿 Branch feature allows forking conversations from a specific point (coming soon).";
+      document.getElementById('tourTopbar').classList.add('tour-highlight');
     } else if (tourStep === 3) {
-      tourTitle.textContent = "3. Send the Prompt";
-      tourText.textContent = "Now type exactly: 'what does this tool do?' into the prompt box below and click the ⚡ Send button!";
-      highlight('tourBottom');
-      tourOverlay.style.display = 'none';
-      
-      // Auto-fill the prompt for them to make it easy
+      tourTitle.textContent = "3. Context & History";
+      tourText.textContent = "The History slider controls how many past turns the AI remembers. The stats show the estimated token count and send time.";
+      document.getElementById('tourHistory').classList.add('tour-highlight');
+    } else if (tourStep === 4) {
+      tourTitle.textContent = "4. Toolbar & Status";
+      tourText.textContent = "The ⚡ button sends the prompt. The 🆓 button opens the Free API summary bench. The status bar shows the live generation timer.";
+      document.getElementById('tourToolbar').classList.add('tour-highlight');
+      document.getElementById('tourStatus').classList.add('tour-highlight');
+    } else if (tourStep === 5) {
+      tourTitle.textContent = "5. Ready to test?";
+      tourText.textContent = "Click the button below to auto-fill the prompt and run the simulation!";
+      tourNextBtn.textContent = "Auto-Fill & Run";
+      tourNextBtn.style.background = "var(--green)";
+      document.getElementById('masterText').classList.add('tour-highlight');
+    } else if (tourStep === 6) {
       document.getElementById('masterText').value = "what does this tool do?";
-      document.getElementById('masterText').style.boxShadow = "0 0 15px var(--accent)";
+      document.getElementById('sendBtn').click();
+      tourOverlay.style.display = 'none';
     }
   };
 
@@ -890,30 +917,27 @@
     const promptText = document.getElementById('masterText').value.trim().toLowerCase();
     if (!promptText) return;
 
-    // If they typed something else, just force it for the demo
     if(demoPhase === 0 && promptText !== "what does this tool do?") {
       document.getElementById('masterText').value = "what does this tool do?";
       return alert("Please type exactly: 'what does this tool do?' to run the demo.");
     }
 
-    document.getElementById('masterText').style.boxShadow = "none";
+    clearHighlights();
     document.getElementById('masterText').value = '';
 
     const activeModels = CH.filter(c => c.checked).map(c => c.id);
     if (activeModels.length === 0) return alert("Select at least one model.");
 
+    const promptToUse = (demoPhase === 0) ? "what does this tool do?" : "how does the local synthesis work?";
+
     const newTurn = {
       n: turns.length + 1,
-      prompt: document.getElementById('masterText').value || (demoPhase === 0 ? "what does this tool do?" : "how does the local synthesis work?"),
+      prompt: promptToUse,
       replies: {},
       order: activeModels,
       times: {},
       hybrid: { text: "Waiting for LLMs...", sources: activeModels, score: 0, reason: "" }
     };
-    
-    // If demoPhase 0, the textbox was just cleared, so grab the forced text
-    if (demoPhase === 0) newTurn.prompt = "what does this tool do?";
-    if (demoPhase === 1) newTurn.prompt = "how does the local synthesis work?";
 
     turns.push(newTurn);
     renderAll(); 
@@ -922,14 +946,10 @@
 
     // MOCK SCRAPING DELAY
     setTimeout(() => {
-      let hasLong = false;
       activeModels.forEach(id => {
         const c = CH.find(x => x.id === id);
-        // Use short if slider <= 400, else use long
         const isShort = c.maxTokens <= 400;
-        if(!isShort) hasLong = true;
-        
-        const textObj = MOCK_RESPONSES[newTurn.prompt];
+        const textObj = MOCK_RESPONSES[promptToUse];
         const responseText = isShort ? textObj.short[id] : textObj.long[id];
         
         newTurn.replies[id] = responseText + "\n\nSCORE: 9/10\nREASON: Accurately described the tool.";
@@ -941,13 +961,10 @@
       
       // MOCK SYNTHESIS DELAY
       setTimeout(() => {
-        // Build the hybrid text based on the selected models
         let hybridText = "";
         activeModels.forEach(id => {
-           const c = CH.find(x => x.id === id);
-           const isShort = c.maxTokens <= 400;
-           const textObj = MOCK_RESPONSES[newTurn.prompt].hybrid;
-           hybridText += (isShort ? textObj.short[id] : textObj.long[id]) + " ";
+           const hybridObj = MOCK_RESPONSES[promptToUse].hybrid;
+           hybridText += (hybridObj[id] || "") + " ";
         });
         
         newTurn.hybrid.text = hybridText.trim();
