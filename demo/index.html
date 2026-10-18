@@ -11,11 +11,12 @@
     --radius:8px;
   }
   * { box-sizing: border-box; }
+  /* INCREASED BASE FONT SIZE BY 2PX */
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
-    font:16px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    font:18px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 
   .app { display:grid; height:100vh;
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: 260px 1fr; /* Slightly wider sidebar for larger fonts */
     grid-template-rows: auto 1fr auto;
     grid-template-areas: "top top" "left center" "bottom bottom"; }
 
@@ -24,11 +25,11 @@
     padding:6px 10px 0; border-bottom:1px solid var(--border); background:var(--panel);
     position:relative; }
   .tabs { display:flex; gap:3px; flex:1; overflow-x:auto; }
-  .tab { padding:7px 13px; border:1px solid transparent; border-bottom:none;
+  .tab { padding:8px 14px; border:1px solid transparent; border-bottom:none;
     border-radius:6px 6px 0 0; background:transparent; color:var(--muted);
-    cursor:pointer; font-size:16px; white-space:nowrap; font-family:inherit; }
+    cursor:pointer; font-size:18px; white-space:nowrap; font-family:inherit; }
   .tab.active { background:var(--bg); color:var(--text); border-color:var(--border); }
-  .branch-pill, .legend-pill { font-size:15px; color:var(--muted); padding:6px 11px;
+  .branch-pill, .legend-pill { font-size:16px; color:var(--muted); padding:6px 11px;
     border:1px solid var(--border); border-radius:6px; cursor:pointer;
     white-space:nowrap; margin-bottom:4px; background:transparent; font:inherit; }
   .branch-pill:hover, .legend-pill:hover { border-color:var(--accent); color:var(--text); }
@@ -36,133 +37,133 @@
 
   .legend-drop { position:absolute; top:calc(100% + 4px); right:60px;
     background:var(--panel-2); border:1px solid var(--accent);
-    border-radius:10px; padding:12px; width:360px;
+    border-radius:10px; padding:14px; width:380px;
     box-shadow:0 12px 40px rgba(0,0,0,.7); z-index:50;
-    display:none; font-size:14px; }
+    display:none; font-size:16px; }
   .legend-drop.open { display:block; }
   .legend-drop .ld-head { display:flex; align-items:center; gap:6px;
-    font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    font-size:13px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--accent); margin-bottom:8px; }
   .legend-drop .ld-head .spacer { flex:1; }
   .legend-drop .ctx-switch { display:flex; gap:3px; margin-bottom:10px; }
-  .legend-drop .ctx-switch button { flex:1; padding:5px 7px; font-size:12px;
+  .legend-drop .ctx-switch button { flex:1; padding:6px 8px; font-size:14px;
     background:var(--panel); border:1px solid var(--border); border-radius:4px;
     color:var(--muted); cursor:pointer; }
   .legend-drop .ctx-switch button.active { color:var(--text); border-color:var(--accent); }
-  .legend-drop .legend-list { display:flex; flex-direction:column; gap:6px;
-    max-height:340px; overflow-y:auto; }
-  .legend-drop .legend-item { display:flex; gap:8px; align-items:flex-start; }
-  .legend-drop .legend-item .ico { min-width:24px; font-size:16px; text-align:center; }
+  .legend-drop .legend-list { display:flex; flex-direction:column; gap:8px;
+    max-height:400px; overflow-y:auto; }
+  .legend-drop .legend-item { display:flex; gap:10px; align-items:flex-start; }
+  .legend-drop .legend-item .ico { min-width:28px; font-size:20px; text-align:center; }
   .legend-drop .legend-item .txt { color:var(--muted); line-height:1.4; }
 
   /* ---- Left ---- */
   .leftbar { grid-area: left; border-right:1px solid var(--border);
-    background:var(--panel); padding:10px; overflow-y:auto;
-    display:flex; flex-direction:column; gap:10px; }
-  .lb-section { font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    background:var(--panel); padding:12px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:12px; }
+  .lb-section { font-size:13px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--muted); padding:2px 0; }
   .master-slider { background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); padding:9px 11px; }
+    border-radius:var(--radius); padding:10px 12px; }
   .master-slider .head { display:flex; align-items:center;
-    margin-bottom:7px; gap:8px; }
-  .master-slider .label { font-size:13px; color:var(--muted); }
+    margin-bottom:8px; gap:8px; }
+  .master-slider .label { font-size:15px; color:var(--muted); }
   .master-slider .spacer { flex:1; }
-  .master-slider .val { font-size:14px; color:var(--amber); font-weight:600;
+  .master-slider .val { font-size:16px; color:var(--amber); font-weight:600;
     font-variant-numeric:tabular-nums; }
   .master-slider .lock-btn { background:transparent; border:1px solid transparent;
     color:var(--muted); cursor:pointer; padding:2px 5px;
-    border-radius:4px; font-size:15px; opacity:.4; }
+    border-radius:4px; font-size:17px; opacity:.4; }
   .master-slider .lock-btn:hover { background:rgba(255,255,255,.06); opacity:.8; }
   .master-slider .lock-btn.on { opacity:1; border-color:var(--accent);
     filter:drop-shadow(0 0 4px var(--accent)); }
   .master-slider input[type="range"] { width:100%; accent-color:var(--amber);
-    height:5px; cursor:pointer; }
+    height:6px; cursor:pointer; }
 
-  .trio-toggle { display:flex; align-items:center; gap:8px; padding:8px 11px;
+  .trio-toggle { display:flex; align-items:center; gap:8px; padding:10px 12px;
     background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); cursor:pointer; font-size:14px; }
+    border-radius:var(--radius); cursor:pointer; font-size:16px; }
   .trio-toggle:hover { border-color:var(--green); }
   .trio-toggle.on { border-color:var(--green); color:var(--green); }
-  .trio-toggle .sw { width:32px; height:18px; border-radius:10px;
+  .trio-toggle .sw { width:36px; height:20px; border-radius:12px;
     background:var(--border); position:relative; transition:background .15s; }
   .trio-toggle.on .sw { background:var(--green); }
   .trio-toggle .sw::after { content:''; position:absolute; top:2px; left:2px;
-    width:14px; height:14px; border-radius:50%; background:#fff;
+    width:16px; height:16px; border-radius:50%; background:#fff;
     transition:transform .15s; }
-  .trio-toggle.on .sw::after { transform:translateX(14px); }
+  .trio-toggle.on .sw::after { transform:translateX(16px); }
 
-  .llm-row { padding:9px 11px; border:1px solid var(--border); background:var(--panel-2);
-    border-radius:6px; display:flex; flex-direction:column; gap:6px;
+  .llm-row { padding:10px 12px; border:1px solid var(--border); background:var(--panel-2);
+    border-radius:8px; display:flex; flex-direction:column; gap:8px;
     cursor:pointer; transition:border-color .12s; }
   .llm-row:hover { border-color:var(--accent); }
   .llm-row.off { opacity:.45; }
-  .llm-row .llm-head { display:flex; align-items:center; gap:9px; font-size:15px; }
+  .llm-row .llm-head { display:flex; align-items:center; gap:10px; font-size:17px; }
   .llm-row .llm-head input[type="checkbox"] { accent-color:var(--accent);
-    margin:0; width:22px; height:22px; cursor:pointer; pointer-events:none; }
-  .llm-row .llm-emoji { font-size:18px; }
+    margin:0; width:24px; height:24px; cursor:pointer; pointer-events:none; }
+  .llm-row .llm-emoji { font-size:20px; }
   .llm-row .llm-name { flex:1; font-weight:600; }
-  .llm-row .llm-tok { font-size:14px; color:var(--amber);
-    font-variant-numeric:tabular-nums; min-width:40px; text-align:right; }
+  .llm-row .llm-tok { font-size:16px; color:var(--amber);
+    font-variant-numeric:tabular-nums; min-width:45px; text-align:right; }
   .llm-row .llm-tok.unl { color:var(--green); }
   .llm-row .llm-tog { background:transparent; border:none; color:var(--muted);
-    padding:2px 4px; font-size:15px; cursor:pointer; border-radius:3px;
+    padding:2px 4px; font-size:17px; cursor:pointer; border-radius:3px;
     opacity:.35; }
   .llm-row .llm-tog.on { opacity:1; }
   .llm-row .llm-tog:hover { background:rgba(255,255,255,.06); }
   .llm-row input[type="range"] { width:100%; accent-color:var(--amber);
-    height:4px; cursor:pointer; margin:0; }
-  .llm-row .prefix { font-size:12px; color:var(--muted); font-style:italic;
+    height:5px; cursor:pointer; margin:0; }
+  .llm-row .prefix { font-size:14px; color:var(--muted); font-style:italic;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    padding-top:4px; border-top:1px dashed var(--border); }
+    padding-top:6px; border-top:1px dashed var(--border); }
 
   /* ---- Center ---- */
-  .center { grid-area: center; overflow-y:auto; padding:18px 24px; }
-  .wrap { max-width:900px; margin:0 auto; }
-  .turn { margin-bottom:22px; border-left:2px solid transparent;
-    padding-left:12px; }
+  .center { grid-area: center; overflow-y:auto; padding:20px 28px; }
+  .wrap { max-width:950px; margin:0 auto; }
+  .turn { margin-bottom:24px; border-left:2px solid transparent;
+    padding-left:14px; }
   .turn.in-ctx { border-left-color:var(--accent); }
 
   .turn-head { display:flex; align-items:center; justify-content:center;
-    gap:10px; margin-bottom:10px; font-size:13px; color:var(--muted);
+    gap:10px; margin-bottom:12px; font-size:15px; color:var(--muted);
     letter-spacing:.06em; text-transform:uppercase; cursor:pointer;
-    user-select:none; padding:5px 0; border-top:1px solid var(--border);
+    user-select:none; padding:6px 0; border-top:1px solid var(--border);
     border-bottom:1px solid var(--border); }
   .turn-head:hover { color:var(--text); }
   .turn-head .tnum { color:var(--accent); font-weight:600; }
   .turn-head .log-btn { background:transparent; border:none; color:var(--muted);
-    cursor:pointer; padding:2px 6px; border-radius:4px; font-size:14px; }
+    cursor:pointer; padding:2px 6px; border-radius:4px; font-size:16px; }
 
-  .prompt-card { padding:11px 13px; border-radius:var(--radius);
-    background:#141821; border:1px solid var(--border); font-size:16px;
-    margin-bottom:10px; white-space:pre-wrap; word-wrap:break-word; }
-  .prompt-card .who { font-size:11px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .prompt-card { padding:12px 14px; border-radius:var(--radius);
+    background:#141821; border:1px solid var(--border); font-size:18px;
+    margin-bottom:12px; white-space:pre-wrap; word-wrap:break-word; }
+  .prompt-card .who { font-size:13px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
 
   .hybrid-card { border-radius:var(--radius); background:#161e2e;
-    border:1px solid #2a3d5c; overflow:hidden; margin-bottom:6px; }
-  .hybrid-label { font-size:11px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--accent); padding:7px 12px 0 12px; }
-  .hybrid-body { padding:5px 12px 10px 12px; font-size:16px;
+    border:1px solid #2a3d5c; overflow:hidden; margin-bottom:8px; }
+  .hybrid-label { font-size:13px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--accent); padding:8px 14px 0 14px; }
+  .hybrid-body { padding:6px 14px 12px 14px; font-size:18px;
     white-space:pre-wrap; word-wrap:break-word; }
 
-  .score-bar { padding:8px 12px; font-size:14px; cursor:pointer;
+  .score-bar { padding:10px 14px; font-size:16px; cursor:pointer;
     background:rgba(63,185,80,.09); color:var(--green);
     border-top:1px solid var(--border);
     display:flex; gap:8px; align-items:flex-start; }
   .score-bar.mid { background:rgba(240,180,41,.09); color:var(--amber); }
   .score-bar.low { background:rgba(248,81,73,.09); color:var(--red); }
   .score-bar .pct { font-weight:700; white-space:nowrap;
-    font-variant-numeric:tabular-nums; min-width:56px; }
+    font-variant-numeric:tabular-nums; min-width:60px; }
   .score-bar .reason { flex:1; color:var(--muted); font-weight:400;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .score-bar.open .reason { white-space:normal; }
 
-  .source-bar { display:flex; align-items:center; gap:6px; padding:7px 10px;
+  .source-bar { display:flex; align-items:center; gap:8px; padding:8px 12px;
     border-top:1px solid var(--border); background:rgba(0,0,0,.15);
-    cursor:pointer; user-select:none; }
+    cursor:pointer; user-select:none; flex-wrap:wrap; }
   .source-bar:hover { background:rgba(255,255,255,.03); }
   .src-emoji { background:var(--panel); border:1px solid var(--border);
-    color:var(--text); cursor:pointer; padding:4px 9px; font-size:15px;
+    color:var(--text); cursor:pointer; padding:5px 10px; font-size:17px;
     border-radius:6px; font-family:inherit; }
   .src-emoji:hover { border-color:var(--accent); }
   .src-emoji.on { border-color:var(--accent); background:#1a2130;
@@ -170,63 +171,63 @@
   .src-emoji.omitted { opacity:.45; }
   .source-bar .spacer { flex:1; }
   .source-bar .bar-act { background:transparent; border:1px solid var(--border);
-    color:var(--muted); cursor:pointer; padding:4px 9px; font-size:13px;
+    color:var(--muted); cursor:pointer; padding:5px 10px; font-size:15px;
     border-radius:5px; font-family:inherit; }
   .source-bar .bar-act:hover { color:var(--text); border-color:var(--accent); }
 
   .src-reply { display:none; border-top:1px solid var(--border);
-    background:var(--panel); padding:10px 12px; font-size:16px;
+    background:var(--panel); padding:12px 14px; font-size:18px;
     white-space:pre-wrap; word-wrap:break-word; }
   .src-reply.open { display:block; }
-  .src-reply .src-head { font-size:11px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--muted); margin-bottom:5px;
+  .src-reply .src-head { font-size:13px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:6px;
     display:flex; gap:8px; align-items:center; }
-  .src-reply .src-head .time { color:var(--muted); font-size:12px;
+  .src-reply .src-head .time { color:var(--muted); font-size:14px;
     text-transform:none; letter-spacing:0; }
   .src-reply .src-head .pct { margin-left:auto; color:var(--green);
     font-weight:600; font-variant-numeric:tabular-nums; }
   .src-reply .src-head .pct.mid { color:var(--amber); }
   .src-reply .src-head .pct.low { color:var(--red); }
-  .src-reply .src-reason { font-size:12px; color:var(--muted);
-    margin-top:7px; padding-top:6px; border-top:1px dashed var(--border); }
+  .src-reply .src-reason { font-size:14px; color:var(--muted);
+    margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); }
 
   /* ---- Bottom ---- */
   .bottom { grid-area: bottom; border-top:1px solid var(--border);
-    background:var(--panel); padding:10px 14px;
-    display:flex; flex-direction:column; gap:7px; }
-  .bottom-inner { max-width:900px; margin:0 auto; width:100%;
-    display:flex; flex-direction:column; gap:7px; }
+    background:var(--panel); padding:12px 16px;
+    display:flex; flex-direction:column; gap:8px; }
+  .bottom-inner { max-width:950px; margin:0 auto; width:100%;
+    display:flex; flex-direction:column; gap:8px; }
 
   .history { background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); padding:9px 11px;
-    display:flex; flex-direction:column; gap:7px; }
+    border-radius:var(--radius); padding:10px 12px;
+    display:flex; flex-direction:column; gap:8px; }
   .hs-head { display:flex; align-items:center; gap:8px;
-    font-size:12px; color:var(--muted); letter-spacing:.08em;
+    font-size:14px; color:var(--muted); letter-spacing:.08em;
     text-transform:uppercase; }
   .hs-head .spacer { flex:1; }
   .hs-head .meta { font-variant-numeric:tabular-nums; color:var(--accent);
-    letter-spacing:0; text-transform:none; font-size:13px; }
+    letter-spacing:0; text-transform:none; font-size:15px; }
   .hs-row { display:flex; align-items:center; gap:10px; }
-  .hs-preview { flex:1; min-width:0; font-size:14px; color:var(--muted);
+  .hs-preview { flex:1; min-width:0; font-size:16px; color:var(--muted);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .hs-preview strong { color:var(--text); font-weight:600; }
-  .hs-track { flex:0 0 240px; }
+  .hs-track { flex:0 0 260px; }
   .hs-track input[type="range"] { width:100%; accent-color:var(--amber);
-    height:5px; cursor:pointer; }
-  .hs-stats { display:flex; gap:14px; font-size:13px; color:var(--muted);
+    height:6px; cursor:pointer; }
+  .hs-stats { display:flex; gap:16px; font-size:15px; color:var(--muted);
     font-variant-numeric:tabular-nums; }
   .hs-stats strong { color:var(--text); font-weight:600; }
 
-  #masterText { width:100%; min-height:52px; max-height:140px; resize:vertical;
+  #masterText { width:100%; min-height:60px; max-height:160px; resize:vertical;
     background:var(--bg); color:var(--text); border:1px solid var(--border);
-    border-radius:var(--radius); padding:9px 11px; font:inherit;
-    font-size:16px; outline:none; }
+    border-radius:var(--radius); padding:10px 12px; font:inherit;
+    font-size:18px; outline:none; }
   #masterText:focus { border-color:var(--accent); }
 
-  .toolbar { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+  .toolbar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   button { font:inherit; cursor:pointer; border-radius:6px;
     border:1px solid var(--border); background:var(--panel-2); color:var(--text);
-    padding:6px 10px; font-size:16px; line-height:1; }
+    padding:8px 12px; font-size:18px; line-height:1; display:flex; align-items:center; gap:6px; }
   button:hover { border-color:var(--accent); }
   button.primary { background:var(--accent-2); border-color:var(--accent-2); color:#fff; }
   button.toggle { opacity:.45; }
@@ -234,89 +235,104 @@
     box-shadow:0 0 0 1px var(--accent) inset; }
   button.free.on { border-color:var(--green); color:var(--green);
     box-shadow:0 0 0 1px var(--green) inset; }
+  .btn-label { font-size:14px; font-weight:500; }
 
-  .statusbar { display:flex; gap:12px; padding:6px 9px; font-size:13px;
+  .statusbar { display:flex; gap:12px; padding:8px 10px; font-size:15px;
     background:#0b0d11; border:1px solid var(--border); border-radius:6px;
-    font-variant-numeric:tabular-nums; min-height:28px; align-items:center; }
+    font-variant-numeric:tabular-nums; min-height:32px; align-items:center; }
   .sb-prompt { color:var(--accent); font-weight:600; white-space:nowrap; }
   .sb-timer { color:var(--amber); white-space:nowrap; font-weight:600; }
   .sb-timer.done { color:var(--green); }
   .sb-status { color:var(--muted); white-space:nowrap; }
-  .sb-progress { flex:1; height:3px; background:var(--border); border-radius:2px;
+  .sb-progress { flex:1; height:4px; background:var(--border); border-radius:2px;
     overflow:hidden; min-width:60px; position:relative; }
   .sb-progress .fill { position:absolute; inset:0 auto 0 0;
     background:linear-gradient(90deg, var(--amber), var(--accent));
     transition:width .5s linear; }
 
-  ::-webkit-scrollbar { width:9px; height:9px; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-thumb { background:#2a2f3a; border-radius:10px; }
 
-  /* DEMO SPECIFIC STYLES */
-  .tour-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 1000;
-    display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(3px);
+  /* TOUR MODAL */
+  .tour-modal {
+    display: none; position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.4); backdrop-filter: blur(2px);
+    justify-content: center; align-items: center;
   }
-  .tour-box {
+  .tour-modal.show { display: flex; }
+  .tour-content {
     background: var(--panel-2); border: 2px solid var(--accent);
-    border-radius: 12px; padding: 24px; max-width: 450px; text-align: center;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+    border-radius: 12px; padding: 30px; width: 500px; max-width: 90%;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8); position: relative;
+    text-align: center;
   }
-  .tour-box h2 { color: var(--accent); margin-top: 0; font-size: 20px; }
-  .tour-box p { color: var(--text); margin-bottom: 20px; line-height: 1.6; font-size: 15px; }
+  .tour-close {
+    position: absolute; top: 15px; right: 20px; font-size: 24px;
+    color: var(--muted); cursor: pointer; background: none; border: none;
+  }
+  .tour-close:hover { color: var(--red); }
+  .tour-content h2 { color: var(--accent); margin-top: 0; font-size: 22px; }
+  .tour-content p { color: var(--text); font-size: 16px; line-height: 1.6; margin-bottom: 24px; min-height: 80px; }
+  .tour-actions { display: flex; justify-content: center; gap: 10px; }
   .tour-btn {
-    background: var(--accent); color: #fff; border: none; padding: 10px 20px;
+    background: var(--accent); color: #fff; border: none; padding: 10px 24px;
     border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;
-    transition: background 0.2s;
   }
   .tour-btn:hover { background: var(--accent-2); }
+  .tour-btn.secondary { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
   
-  .tour-highlight {
-    box-shadow: 0 0 0 4px var(--accent) !important;
-    z-index: 900;
-    position: relative;
-    background-color: var(--bg) !important;
+  #resumeTutBtn {
+    display: none; position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
+    z-index: 900; background: var(--amber); color: #000; font-weight: bold; border: none;
+    padding: 8px 16px; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
   }
 </style>
 </head>
 <body>
 
-<!-- DEMO TOUR OVERLAY -->
-<div class="tour-overlay" id="tourOverlay">
-  <div class="tour-box">
+<button id="resumeTutBtn" onclick="openTour()">Resume Tutorial</button>
+
+<!-- TOUR MODAL -->
+<div class="tour-modal" id="tourModal">
+  <div class="tour-content">
+    <button class="tour-close" onclick="closeTour()">&times;</button>
     <h2 id="tourTitle">Welcome to LLM Explorer</h2>
     <p id="tourText">This is a live demo of a local-first, multi-LLM orchestration cockpit. Let's walk through how it works.</p>
-    <button class="tour-btn" id="tourNextBtn">Next</button>
+    <div class="tour-actions">
+      <button class="tour-btn secondary" id="tourPrev" style="display:none;" onclick="changeTourStep(-1)">Back</button>
+      <button class="tour-btn" id="tourNext" onclick="changeTourStep(1)">Next</button>
+    </div>
   </div>
 </div>
 
 <div class="app">
-  <div class="topbar" id="tourTopbar">
+  <div class="topbar">
     <div class="tabs" id="tabs"></div>
     
-    <button style="padding: 6px 10px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🔐 Login (Disabled)</button>
-    <button style="padding: 6px 10px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🗑️ New Chat (Disabled)</button>
+    <button id="loginBtn" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 15px; cursor: pointer;">🔐 Login Mode</button>
+    <button id="newChatBtn" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 15px; cursor: pointer;">🗑️ New Chat</button>
 
-    <button class="legend-pill" id="legendPill">📖 legend ▾</button>
-    <button class="branch-pill">🌿1 ▾</button>
+    <button class="legend-pill" id="legendPill">📖 Legend ▾</button>
+    <button class="branch-pill">🌿 Branch ▾</button>
+    
     <div class="legend-drop" id="legendDrop">
       <div class="ld-head"><span>📖 Legend</span><span class="spacer"></span>
-        <span id="ctxPill" style="color:var(--muted);text-transform:none;letter-spacing:0;font-size:13px">idle</span>
+        <span id="ctxPill" style="color:var(--muted);text-transform:none;letter-spacing:0;font-size:15px">idle</span>
       </div>
       <div class="ctx-switch" id="ctxSwitch">
-        <button data-ctx="idle" class="active">idle</button>
-        <button data-ctx="reply">reply</button>
-        <button data-ctx="summary">summary</button>
+        <button data-ctx="idle" class="active" onclick="setLegendContext('idle')">UI Overview</button>
+        <button data-ctx="reply" onclick="setLegendContext('reply')">Reply Tools</button>
+        <button data-ctx="summary" onclick="setLegendContext('summary')">Free Bench</button>
       </div>
       <div class="legend-list" id="legendBody"></div>
     </div>
   </div>
 
-  <div class="leftbar" id="tourLeftbar">
+  <div class="leftbar">
     <div class="lb-section">Token budget</div>
     <div class="master-slider">
       <div class="head">
-        <span class="label">Master</span>
+        <span class="label">Master Slider</span>
         <button class="lock-btn" id="masterLock" title="Lock — all sliders move together">🔒</button>
         <span class="spacer"></span>
         <span class="val" id="masterVal">∞</span>
@@ -325,7 +341,7 @@
     </div>
     <div class="trio-toggle" id="trioToggle">
       <div class="sw"></div>
-      <span>∞ for 🌊4 · 🔭8 · 💠6</span>
+      <span>∞ for DeepSeek, Perplexity, Meta</span>
     </div>
     <div class="lb-section">Models</div>
     <div id="llmList"></div>
@@ -335,11 +351,11 @@
     <div class="wrap" id="convWrap"></div>
   </div>
 
-  <div class="bottom" id="tourBottom">
+  <div class="bottom">
     <div class="bottom-inner">
-      <div class="history" id="tourHistory">
+      <div class="history">
         <div class="hs-head">
-          <span>📜 History</span><span class="spacer"></span>
+          <span>📜 History Context</span><span class="spacer"></span>
           <span class="meta" id="hsMeta">0 of 0 turns included</span>
         </div>
         <div class="hs-row">
@@ -350,24 +366,24 @@
         </div>
         <div class="hs-stats">
           <span>Depth: <strong id="hsDepth">0 turn</strong></span>
-          <span>Context: <strong id="hsTok">0 tok</strong></span>
-          <span>Next send: <strong id="hsNext">~0.0s</strong></span>
+          <span>Est. Context: <strong id="hsTok">0 tok</strong></span>
+          <span>Est. Time: <strong id="hsNext">~0.0s</strong></span>
         </div>
       </div>
 
-      <textarea id="masterText" placeholder="Follow the tour steps..."></textarea>
+      <textarea id="masterText" placeholder="Type a prompt here and hit Send..."></textarea>
 
-      <div class="toolbar" id="tourToolbar">
-        <button class="primary" id="sendBtn">⚡</button>
-        <button>🔄</button>
-        <button>Sync</button>
-        <button class="toggle on">✨</button>
-        <button>🪟</button>
-        <button class="toggle free" id="freeBtn">🆓</button>
-        <button>⚙</button>
+      <div class="toolbar">
+        <button class="primary" id="sendBtn">⚡ <span class="btn-label">Send</span></button>
+        <button>🔄 <span class="btn-label">Retry</span></button>
+        <button>Sync <span class="btn-label">View</span></button>
+        <button class="toggle on">✨ <span class="btn-label">Prefix</span></button>
+        <button>🪟 <span class="btn-label">Hybrid</span></button>
+        <button class="toggle free" id="freeBtn">🆓 <span class="btn-label">Free APIs</span></button>
+        <button>⚙ <span class="btn-label">Settings</span></button>
       </div>
 
-      <div class="statusbar" id="tourStatus">
+      <div class="statusbar">
         <span class="sb-prompt" id="sbPrompt">✎ Master</span>
         <span class="sb-timer" id="sbTimer">est. next send: ~4.8s</span>
         <span class="sb-status" id="sbStatus">idle</span>
@@ -621,7 +637,7 @@
       head.innerHTML = `<span class="tnum">▶ T${t.n}</span>
         <span>·</span>
         <span>${t.prompt.slice(0, 60)}${t.prompt.length > 60 ? '…' : ''}</span>
-        ${inCtx ? '<span style="color:var(--accent);font-size:11px">· in context</span>' : ''}
+        ${inCtx ? '<span style="color:var(--accent);font-size:13px">· in context</span>' : ''}
         <button class="log-btn" title="Channel log">📜</button>`;
       el.appendChild(head);
 
@@ -668,8 +684,9 @@
 
         bar.innerHTML = `${emojiButtons}
           <span class="spacer"></span>
-          <button class="bar-act" data-act="sources">⊞ view sources</button>
-          <button class="bar-act" data-act="all">⊞ expand all</button>`;
+          <button class="bar-act" data-act="sources">⊞ View Sources</button>
+          <button class="bar-act" data-act="export">📥 Export</button>
+          <button class="bar-act" data-act="all">⊞ Expand All</button>`;
 
         bar.querySelectorAll('.src-emoji').forEach(btn => {
           btn.onclick = (e) => {
@@ -683,6 +700,10 @@
           e.stopPropagation();
           t.hybrid.sources.forEach(id => setOpen(t, id, true));
           renderConv();
+        };
+        bar.querySelector('[data-act="export"]').onclick = (e) => {
+          e.stopPropagation();
+          alert("Simulated Export: Data saved to downloads!");
         };
         bar.querySelector('[data-act="all"]').onclick = (e) => {
           e.stopPropagation();
@@ -817,15 +838,31 @@
     }
   }
 
+  // LEGEND LOGIC
   const LEGENDS = {
     idle: [
-      ['🤖1','ChatGPT'],['🎭2','Claude'],['♊3','Gemini'],['🌊4','DeepSeek'],
-      ['🌌5','Grok'],['💠6','Meta AI'],['🛩️7','Copilot'],['🔭8','Perplexity'],
-      ['🪟','Hybrid'],['🌿','Branch'],['▶','Turn'],
-      ['🔒','Master lock'],['🎯','Score bar'],['✨','Prefix prepend'],
-      ['⊞','Expand all replies'],
+      ['🔒', 'Master Slider Lock: Ties all token sliders together.'],
+      ['✨', 'Prefix Toggle: Injects your chosen style instructions into the prompt.'],
+      ['🎚️', 'Token Slider: Adjusts the max length of the response.'],
+      ['▶', 'Turn: A single prompt and reply pair.'],
+      ['🌿', 'Branch: Fork a conversation from a specific reply to explore new paths.'],
+      ['🪟', 'Hybrid Tab: Shows the synthesized answer from all selected models.']
+    ],
+    reply: [
+      ['🎯', 'Score Bar: Click to expand the Fidelity Clause reason.'],
+      ['🦁', 'Source Emoji: Click any to expand that specific raw LLM reply.'],
+      ['⊞ View Sources', 'Opens only the replies that contributed to the hybrid answer.'],
+      ['⊞ Expand All', 'Toggles every reply in the current turn open/closed.'],
+      ['📥 Export', 'Simulates downloading the generated text.'],
+      ['📜', 'Channel Log: View timings and raw output formatting.']
+    ],
+    summary: [
+      ['🆓', 'Summary Bench: Sends long texts to a free API to summarize them.'],
+      ['⚡', 'Groq API (Free)'],['🌬️', 'Mistral API (Free)'],
+      ['🟩', 'NVIDIA NIM (Free)'],['🧠', 'Cerebras (Free)']
     ]
   };
+  
   function setLegendContext(c) {
     document.getElementById('ctxPill').textContent = c;
     document.querySelectorAll('#ctxSwitch button').forEach(b => {
@@ -835,9 +872,6 @@
       .map(([i, t]) => `<div class="legend-item"><span class="ico">${i}</span><span class="txt">${t}</span></div>`)
       .join('');
   }
-  document.querySelectorAll('#ctxSwitch button').forEach(b => {
-    b.onclick = (e) => { e.stopPropagation(); setLegendContext(b.dataset.ctx); };
-  });
 
   const legendPill = document.getElementById('legendPill');
   const legendDrop = document.getElementById('legendDrop');
@@ -864,75 +898,122 @@
   setLegendContext('idle');
 
   // ==========================================
+  // --- TUTORIAL MODAL LOGIC ---
+  // ==========================================
+  
+  let tourStep = 0;
+  const tourSteps = [
+    {
+      title: "1. The Left Sidebar (Models)",
+      text: "Select which AIs to query using the checkboxes. Use the <b>Token Slider</b> to limit how long the response can be. Click the <b>✨ star</b> to toggle the automatic prefix (which tells the AI how to write). The <b>🔒 lock</b> makes all sliders move together."
+    },
+    {
+      title: "2. The Top Bar",
+      text: "Use the <b>📖 Legend</b> to decode icons. Click <b>🌿 Branch</b> to fork a conversation from any point. The <b>🔐 Login</b> button connects to your accounts, and <b>🗑️ New Chat</b> wipes the screen clean."
+    },
+    {
+      title: "3. The Bottom Area",
+      text: "The <b>History Context</b> slider determines how many past turns are remembered (watch the Depth, Est. Tokens, and Est. Time update live). The toolbar has the <b>⚡ Send</b>, <b>🔄 Retry</b>, and <b>🆓 Free API</b> buttons. The status bar shows the real-time progress."
+    },
+    {
+      title: "4. Run the Prompt",
+      text: "Type a prompt in the box below (e.g., <i>'What do you do?'</i>) and hit <b>⚡ Send</b>. The selected AIs will 'respond', and your local model will synthesize them."
+    },
+    {
+      title: "5. View the Results",
+      text: "Once synthesis is done, click the colored emoji buttons (like 🦁 or 🔍) to see the raw text from each AI. Click <b>📥 Export</b> to save the answer."
+    }
+  ];
+
+  function openTour(reset = false) {
+    if (reset) tourStep = 0;
+    document.getElementById('tourModal').classList.add('show');
+    document.getElementById('resumeTutBtn').style.display = 'none';
+    updateTourUI();
+  }
+
+  function closeTour() {
+    document.getElementById('tourModal').classList.remove('show');
+    if (tourStep < tourSteps.length) {
+      document.getElementById('resumeTutBtn').style.display = 'block';
+    }
+  }
+
+  function updateTourUI() {
+    if (tourStep >= tourSteps.length) {
+      closeTour();
+      return;
+    }
+    document.getElementById('tourTitle').innerHTML = tourSteps[tourStep].title;
+    document.getElementById('tourText').innerHTML = tourSteps[tourStep].text;
+    
+    document.getElementById('tourPrev').style.display = tourStep > 0 ? 'block' : 'none';
+    
+    const nextBtn = document.getElementById('tourNext');
+    if (tourStep === tourSteps.length - 1) {
+      nextBtn.textContent = "Finish & Start Over";
+      nextBtn.onclick = () => {
+        tourStep = 0;
+        updateTourUI();
+      };
+    } else {
+      nextBtn.textContent = "Next";
+      nextBtn.onclick = () => changeTourStep(1);
+    }
+  }
+
+  function changeTourStep(dir) {
+    tourStep += dir;
+    updateTourUI();
+  }
+
+  // Show the tutorial on initial load
+  setTimeout(() => openTour(true), 500);
+
+  // ==========================================
   // --- DEMO SIMULATION LOGIC ---
   // ==========================================
 
-  let tourStep = 0;
-  const tourOverlay = document.getElementById('tourOverlay');
-  const tourTitle = document.getElementById('tourTitle');
-  const tourText = document.getElementById('tourText');
-  const tourNextBtn = document.getElementById('tourNextBtn');
-  
-  function clearHighlights() {
-    document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
-  }
+  let demoPhase = 0;
 
-  tourNextBtn.onclick = () => {
-    tourStep++;
-    clearHighlights();
+  // Simulated Login
+  document.getElementById('loginBtn').onclick = (e) => {
+    const btn = e.currentTarget;
+    btn.textContent = "Logging in...";
+    btn.style.background = "#f0b429";
+    setTimeout(() => {
+      btn.textContent = "✅ Logged In (Simulated)";
+      btn.style.background = "#3fb950";
+    }, 1500);
+  };
 
-    if(tourStep === 1) {
-      tourTitle.textContent = "1. Model Selection";
-      tourText.textContent = "On the left, select which AIs to query. Check the box to include them. Drag the slider to set token limits (∞ means a full detailed response). Click the ✨ to toggle prefixes.";
-      document.getElementById('llmList').classList.add('tour-highlight');
-    } else if (tourStep === 2) {
-      tourTitle.textContent = "2. Top Bar Controls";
-      tourText.textContent = "The 📖 Legend explains the UI icons. The 🌿 Branch feature allows forking conversations from a specific point (coming soon).";
-      document.getElementById('tourTopbar').classList.add('tour-highlight');
-    } else if (tourStep === 3) {
-      tourTitle.textContent = "3. Context & History";
-      tourText.textContent = "The History slider controls how many past turns the AI remembers. The stats show the estimated token count and send time.";
-      document.getElementById('tourHistory').classList.add('tour-highlight');
-    } else if (tourStep === 4) {
-      tourTitle.textContent = "4. Toolbar & Status";
-      tourText.textContent = "The ⚡ button sends the prompt. The 🆓 button opens the Free API summary bench. The status bar shows the live generation timer.";
-      document.getElementById('tourToolbar').classList.add('tour-highlight');
-      document.getElementById('tourStatus').classList.add('tour-highlight');
-    } else if (tourStep === 5) {
-      tourTitle.textContent = "5. Ready to test?";
-      tourText.textContent = "Click the button below to auto-fill the prompt and run the simulation!";
-      tourNextBtn.textContent = "Auto-Fill & Run";
-      tourNextBtn.style.background = "var(--green)";
-      document.getElementById('masterText').classList.add('tour-highlight');
-    } else if (tourStep === 6) {
-      document.getElementById('masterText').value = "what does this tool do?";
-      document.getElementById('sendBtn').click();
-      tourOverlay.style.display = 'none';
+  // Simulated New Chat
+  document.getElementById('newChatBtn').onclick = () => {
+    if (confirm("Are you sure you want to clear this session and start over?")) {
+      turns = [];
+      demoPhase = 0;
+      document.getElementById('masterText').value = '';
+      renderAll();
+      updateHistory();
+      openTour(true); // Restart tutorial
     }
   };
 
-  let demoPhase = 0;
-
   document.getElementById('sendBtn').onclick = () => {
-    const promptText = document.getElementById('masterText').value.trim().toLowerCase();
-    if (!promptText) return;
+    const promptText = document.getElementById('masterText').value.trim();
+    if (!promptText) return alert("Please type a prompt first.");
 
-    if(demoPhase === 0 && promptText !== "what does this tool do?") {
-      document.getElementById('masterText').value = "what does this tool do?";
-      return alert("Please type exactly: 'what does this tool do?' to run the demo.");
-    }
-
-    clearHighlights();
-    document.getElementById('masterText').value = '';
+    closeTour(); // Hide the tutorial if it's open
 
     const activeModels = CH.filter(c => c.checked).map(c => c.id);
     if (activeModels.length === 0) return alert("Select at least one model.");
 
-    const promptToUse = (demoPhase === 0) ? "what does this tool do?" : "how does the local synthesis work?";
-
+    let mockKey = "what does this tool do?";
+    if (demoPhase === 1) mockKey = "how does the local synthesis work?";
+    
     const newTurn = {
       n: turns.length + 1,
-      prompt: promptToUse,
+      prompt: promptText,
       replies: {},
       order: activeModels,
       times: {},
@@ -940,6 +1021,7 @@
     };
 
     turns.push(newTurn);
+    document.getElementById('masterText').value = '';
     renderAll(); 
     updateTimer(); 
     startSend();
@@ -949,7 +1031,7 @@
       activeModels.forEach(id => {
         const c = CH.find(x => x.id === id);
         const isShort = c.maxTokens <= 400;
-        const textObj = MOCK_RESPONSES[promptToUse];
+        const textObj = MOCK_RESPONSES[mockKey];
         const responseText = isShort ? textObj.short[id] : textObj.long[id];
         
         newTurn.replies[id] = responseText + "\n\nSCORE: 9/10\nREASON: Accurately described the tool.";
@@ -963,7 +1045,7 @@
       setTimeout(() => {
         let hybridText = "";
         activeModels.forEach(id => {
-           const hybridObj = MOCK_RESPONSES[promptToUse].hybrid;
+           const hybridObj = MOCK_RESPONSES[mockKey].hybrid;
            hybridText += (hybridObj[id] || "") + " ";
         });
         
@@ -972,22 +1054,18 @@
         newTurn.hybrid.reason = "Synthesis Complete";
         
         renderAll();
-        
-        // TRIGGER FOLLOW-UP
+
+        // TUTORIAL PROGRESSION
         if(demoPhase === 0) {
           demoPhase = 1;
-          setTimeout(() => {
-            document.getElementById('masterText').value = "how does the local synthesis work?";
-            document.getElementById('masterText').style.boxShadow = "0 0 15px var(--green)";
-            
-            // Auto-click send after 3 seconds
-            setTimeout(() => {
-               if(document.getElementById('masterText').value === "how does the local synthesis work?") {
-                  document.getElementById('sendBtn').click();
-               }
-            }, 3000);
-          }, 2000);
+          tourStep = 4; // Jump to step 5 (View Results)
+          openTour();
+        } else if (demoPhase === 1) {
+          demoPhase = 2;
+          tourStep = 0; // Reset tour
+          document.getElementById('resumeTutBtn').style.display = 'none';
         }
+
       }, 2000);
     }, 1500);
   };
