@@ -257,6 +257,12 @@
 <div class="app">
   <div class="topbar">
     <div class="tabs" id="tabs"></div>
+    
+    <!-- NEW BUTTONS -->
+    <button onclick="window.api.startLoginMode()" style="padding: 6px 10px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer; margin-right: 8px; font-weight: bold; font-size: 13px;">🔐 Login Mode</button>
+    <button onclick="clearChat()" style="padding: 6px 10px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; margin-right: 12px; font-weight: bold; font-size: 13px;">🗑️ New Chat</button>
+    <!-- END NEW BUTTONS -->
+
     <button class="legend-pill" id="legendPill">📖 legend ▾</button>
     <button class="branch-pill">🌿1 ▾</button>
     <div class="legend-drop" id="legendDrop">
@@ -279,9 +285,9 @@
         <span class="label">Master</span>
         <button class="lock-btn" id="masterLock" title="Lock — all sliders move together">🔒</button>
         <span class="spacer"></span>
-        <span class="val" id="masterVal">600 tok</span>
+        <span class="val" id="masterVal">∞</span>
       </div>
-      <input type="range" id="masterSlider" min="100" max="1000" step="50" value="600">
+      <input type="range" id="masterSlider" min="100" max="1000" step="50" value="1000">
     </div>
     <div class="trio-toggle" id="trioToggle">
       <div class="sw"></div>
@@ -341,16 +347,16 @@
 
 <script>
   const CH = [
-    { id:'chatgpt',    emoji:'🤖1', name:'ChatGPT',    checked:true,  maxTokens:600, prefixOn:true, style:'balanced, conversational',    tps:80,  ttft:0.4 },
-    { id:'claude',     emoji:'🎭2', name:'Claude',     checked:true,  maxTokens:600, prefixOn:true, style:'concise, direct, no preamble', tps:75,  ttft:0.4 },
-    { id:'gemini',     emoji:'♊3', name:'Gemini',     checked:true,  maxTokens:600, prefixOn:true, style:'structured, comprehensive',    tps:195, ttft:0.5 },
-    { id:'deepseek',   emoji:'🌊4', name:'DeepSeek',   checked:true,  maxTokens:600, prefixOn:true, style:'technical, code-friendly',     tps:110, ttft:0.4 },
-    { id:'grok',       emoji:'🌌5', name:'Grok',       checked:false, maxTokens:600, prefixOn:true, style:'witty, unfiltered',            tps:90,  ttft:0.5 },
-    { id:'meta',       emoji:'💠6', name:'Meta AI',    checked:false, maxTokens:600, prefixOn:true, style:'casual, socially aware',       tps:85,  ttft:0.5 },
-    { id:'copilot',    emoji:'🛩️7', name:'Copilot',    checked:false, maxTokens:600, prefixOn:false,style:'professional',                 tps:70,  ttft:0.6 },
-    { id:'perplexity', emoji:'🔭8', name:'Perplexity', checked:false, maxTokens:600, prefixOn:false,style:'research-focused with sources', tps:60,  ttft:0.8 },
-    { id:'google',    emoji:'🔍9', name:'Google AI',  checked:true,  maxTokens:600, prefixOn:true, style:'AI Mode', tps:100, ttft:0.5 },
-    { id:'brave',     emoji:'🦁0', name:'Brave',     checked:false, maxTokens:600, prefixOn:true, style:'Search AI', tps:100, ttft:0.5 },
+    { id:'brave',      emoji:'🦁0', name:'Brave',      checked:true,  maxTokens:1000, prefixOn:true, style:'Search AI',                     tps:100, ttft:0.5 },
+    { id:'google',     emoji:'🔍9', name:'Google AI',  checked:true,  maxTokens:1000, prefixOn:true, style:'AI Mode',                       tps:100, ttft:0.5 },
+    { id:'chatgpt',    emoji:'🤖1', name:'ChatGPT',    checked:false, maxTokens:1000, prefixOn:true, style:'balanced, conversational',      tps:80,  ttft:0.4 },
+    { id:'claude',     emoji:'🎭2', name:'Claude',     checked:false, maxTokens:1000, prefixOn:true, style:'concise, direct, no preamble',  tps:75,  ttft:0.4 },
+    { id:'gemini',     emoji:'♊3', name:'Gemini',     checked:false, maxTokens:1000, prefixOn:true, style:'structured, comprehensive',     tps:195, ttft:0.5 },
+    { id:'deepseek',   emoji:'🌊4', name:'DeepSeek',   checked:false, maxTokens:1000, prefixOn:true, style:'technical, code-friendly',      tps:110, ttft:0.4 },
+    { id:'grok',       emoji:'🌌5', name:'Grok',       checked:false, maxTokens:1000, prefixOn:true, style:'witty, unfiltered',             tps:90,  ttft:0.5 },
+    { id:'meta',       emoji:'💠6', name:'Meta AI',    checked:false, maxTokens:1000, prefixOn:true, style:'casual, socially aware',        tps:85,  ttft:0.5 },
+    { id:'copilot',    emoji:'🛩️7', name:'Copilot',    checked:false, maxTokens:1000, prefixOn:true, style:'professional',                  tps:70,  ttft:0.6 },
+    { id:'perplexity', emoji:'🔭8', name:'Perplexity', checked:false, maxTokens:1000, prefixOn:true, style:'research-focused with sources', tps:60,  ttft:0.8 }
   ];
   const HYB = '🪟';
 
@@ -380,7 +386,7 @@
   }
   function stripScore(raw) { return raw.replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
 
-  let linked = false;
+  let linked = false; // Unlocked by default
 
   function renderLeft() {
     const list = document.getElementById('llmList');
@@ -449,44 +455,8 @@
     renderLeft(); updateHistory(); updateTimer();
   };
 
-  const turns = [
-    {
-      n: 1,
-      prompt: 'Explain quantum entanglement to a curious adult.',
-      replies: {
-        chatgpt: 'Quantum entanglement is when two particles become linked such that measuring one instantly determines the state of the other, no matter the distance.\n\nSCORE: 8/10\nREASON: Solid definition, but skipped the "not a signal" caveat.',
-        claude: 'Entanglement means two particles share a single quantum state. Their properties are correlated in ways that classical physics cannot explain.\n\nSCORE: 9/10\nREASON: Accurate and concise; the "classical physics cannot explain" line is precise.',
-        gemini: 'Quantum entanglement is a phenomenon where particles interact so that the quantum state of each cannot be described independently.\n\nSCORE: 7/10\nREASON: Textbook correct but no intuition-building.',
-        deepseek: 'Entanglement: two systems share a joint quantum state that cannot be factored into product states. Measurement outcomes correlate beyond classical bounds (Bell inequality violations).\n\nSCORE: 8/10\nREASON: Precise, but assumes the reader knows what a product state is.',
-      },
-      order: ['chatgpt','claude','gemini','deepseek'],
-      times: { chatgpt:0.8, claude:1.2, gemini:0.6, deepseek:1.4 },
-      hybrid: {
-        text: 'Entanglement is a quantum link between two particles. Once linked, measuring one tells you about the other — regardless of distance. It is not a signal; it is a correlation that exceeds any classical explanation.',
-        sources: ['chatgpt','claude','deepseek'],
-        omitted: { gemini: 'redundant with chatgpt' },
-        score: 78, reason: 'Strong synthesis; tone could be warmer for the stated audience.',
-      },
-    },
-    {
-      n: 2,
-      prompt: 'Now explain it to a 10-year-old.',
-      replies: {
-        chatgpt: 'Imagine two magic coins. Whenever one lands heads, the other always lands tails — no matter how far apart they are.\n\nSCORE: 9/10\nREASON: The coin metaphor is perfect for this age; simple and accurate.',
-        claude: 'Two magic coins. Flip one, it\'s heads. The other, even across the world, is tails. They\'re linked like that forever.\n\nSCORE: 9/10\nREASON: Clean, brief, and the "linked forever" line lands well.',
-        gemini: 'Picture two best-friend coins. Whenever one smiles, the other smiles too. Even if one is on Earth and one is on Mars.\n\nSCORE: 6/10\nREASON: The smile metaphor is confusing — coins don\'t smile.',
-        deepseek: 'Two dice that always match when rolled. Separated by any distance.\n\nSCORE: 7/10\nREASON: Accurate but a bit dry for a 10-year-old.',
-      },
-      order: ['chatgpt','claude','gemini','deepseek'],
-      times: { chatgpt:0.7, claude:0.9, gemini:0.5, deepseek:1.1 },
-      hybrid: {
-        text: 'Imagine two magic coins. Whenever one lands heads, the other lands tails. Always. Even if one coin is on Earth and the other is on Mars. They\'re not sending messages to each other — they\'re just linked.',
-        sources: ['chatgpt','claude'],
-        omitted: { gemini: 'metaphor drifted', deepseek: 'too terse' },
-        score: 84, reason: 'Strong analogy, correct framing, age-appropriate.',
-      },
-    },
-  ];
+  // START WITH A FRESH SCREEN
+  let turns = [];
 
   let activeTab = 'hybrid';
   const openState = {};
@@ -685,7 +655,6 @@
   const hsMeta = document.getElementById('hsMeta');
   const hsNext = document.getElementById('hsNext');
 
-  // 3. TOKEN & TIME ESTIMATION LOGIC (See section 5 below)
   const est = s => Math.ceil((s || '').length / 4);
   function turnTok(t) {
     let n = est(t.prompt);
@@ -702,8 +671,10 @@
       hsDepth.textContent = '0 turns';
     } else {
       const last = turns[d - 1];
-      hsPreview.innerHTML = `<strong>T${d}:</strong> "${last.prompt.slice(0, 60)}${last.prompt.length > 60 ? '…' : ''}"`;
-      hsDepth.textContent = d + ' turn' + (d === 1 ? '' : 's');
+      if(last) {
+        hsPreview.innerHTML = `<strong>T${d}:</strong> "${last.prompt.slice(0, 60)}${last.prompt.length > 60 ? '…' : ''}"`;
+        hsDepth.textContent = d + ' turn' + (d === 1 ? '' : 's');
+      }
     }
     hsTok.textContent = tokUpTo(d) + ' tok';
     hsMeta.textContent = d === 0 ? `0 of ${turns.length} — fresh` : `${d} of ${turns.length} in context`;
@@ -823,154 +794,98 @@
   renderLeft(); renderAll(); updateHistory(); updateTimer();
   setLegendContext('idle');
 
-    // ==========================================
-    // --- ELECTRON INTEGRATION BRIDGE ---
-    // ==========================================
 
-    // 1. Hook up the Send Button
-    const sendBtn = document.getElementById('sendBtn');
-    const promptInput = document.getElementById('masterText') || document.querySelector('textarea'); // Adjusts to your new UI
+  // ==========================================
+  // --- LIVE ELECTRON INTEGRATION ---
+  // ==========================================
 
-    if (sendBtn && promptInput) {
-      sendBtn.addEventListener('click', () => {
-        const promptText = promptInput.value;
-        if (!promptText.trim()) return;
-        
-        // Send the prompt to the Electron Main process (which triggers Playwright)
-        window.api.sendPrompt(promptText);
-        
-        // Optional: Disable the button or show a loading state here if you want
-        // sendBtn.disabled = true;
-      });
-    }
+  // 1. Clear Chat function
+  window.clearChat = () => {
+    turns = []; // Clear global state
+    renderAll();
+    document.getElementById('convWrap').innerHTML = ''; // clear DOM
+    updateHistory();
+  };
 
-        // 2. Listen for individual LLM replies (from Google and Brave)
-    window.api.onReplyReceived((data) => {
-      const currentTurn = turns[turns.length - 1];
-      if (currentTurn) {
-        // Add the text to the UI data model
-        if (data.text) currentTurn.replies[data.model] = data.text;
-        
-        // Add to order if it's not there
-        if (!currentTurn.order.includes(data.model)) {
-           currentTurn.order.push(data.model);
-        }
+  // 2. Send Button
+  document.getElementById('sendBtn').onclick = () => {
+    const promptText = document.getElementById('masterText').value;
+    if (!promptText.trim()) return;
 
-        // Update the hybrid status
-        currentTurn.hybrid.text = "Synthesizing...";
-        currentTurn.hybrid.reason = "Running local OpenVINO model...";
-        
-        // Re-render to show the colored box lighting up
-        renderAll(); 
-      }
-    });
+    // Get the checked models
+    const activeModels = CH.filter(c => c.checked).map(c => c.id);
+    if (activeModels.length === 0) return alert("Select at least one model.");
 
-    // 3. Listen for the Hybrid OpenVINO stream
-    window.api.onHybridStream((chunk) => {
-      // Find the main chat area in your new UI where the hybrid text should appear
-      // (Adjust this selector to match your new design)
-      const hybridOutput = document.getElementById('convWrap') || document.getElementById('hybrid-output');
-      
-      if (hybridOutput) {
-        // If it's the first chunk, clear the area
-        if (hybridOutput.innerHTML === 'Waiting...') hybridOutput.innerHTML = '';
-        
-        // Create a text node so it streams naturally
-        const textNode = document.createTextNode(chunk);
-        hybridOutput.appendChild(textNode);
-        
-        // Auto-scroll to bottom
-        hybridOutput.scrollTop = hybridOutput.scrollHeight;
-      }
-    });
-
-    // ==========================================
-    // --- LIVE ELECTRON INTEGRATION ---
-    // ==========================================
-
-    // 1. Override the Send Button
-    document.getElementById('sendBtn').onclick = () => {
-      const promptText = document.getElementById('masterText').value;
-      if (!promptText.trim()) return;
-
-      // Create a new live turn object that matches your UI's data structure
-      const newTurn = {
-        n: turns.length + 1,
-        prompt: promptText,
-        replies: {},
-        order: ['google'], // The model we are currently scraping
-        times: {},
-        hybrid: { text: "Waiting for LLMs...", sources: ['google'], score: 0, reason: "" }
-      };
-
-      // Push it to your UI's global state and re-render
-      turns.push(newTurn);
-      document.getElementById('masterText').value = '';
-      renderAll(); 
-      updateTimer(); // Starts your cool visual timer animation
-
-      // Send to the Playwright backend
-      window.api.sendPrompt(promptText);
+    // Create a new turn
+    const newTurn = {
+      n: turns.length + 1,
+      prompt: promptText,
+      replies: {},
+      order: activeModels,
+      times: {},
+      hybrid: { text: "Waiting for LLMs...", sources: activeModels, score: 0, reason: "" }
     };
 
-    // 2. Listen for individual LLM replies (from Google/Playwright)
-    window.api.onReplyReceived((data) => {
-      const currentTurn = turns[turns.length - 1];
-      if (currentTurn) {
-        // Add the text to the UI data model
-        currentTurn.replies[data.model] = data.text;
-        
-        // Update the hybrid status
-        currentTurn.hybrid.text = "Synthesizing...";
-        currentTurn.hybrid.reason = "Running local OpenVINO model...";
-        
-        // Re-render to show the colored box lighting up
-        renderAll(); 
-      }
-    });
+    turns.push(newTurn);
+    document.getElementById('masterText').value = '';
+    renderAll(); 
+    updateTimer(); 
+    startSend(); // Starts the visual loading bar at the bottom
 
-        // 3. Listen for the Hybrid OpenVINO Stream
-    window.api.onHybridStream((chunk) => {
-      const currentTurn = turns[turns.length - 1];
-      if (currentTurn && currentTurn.hybrid) {
-        
-        // Clear the loading text on the first chunk
-        if (currentTurn.hybrid.text.includes("Running local OpenVINO") || currentTurn.hybrid.text === "Synthesizing...") {
-          currentTurn.hybrid.text = "";
-        }
-        
-        currentTurn.hybrid.text += chunk;
-        
-        // Find the LAST hybrid body in the DOM to prevent duplicates
-        const hybridBodies = document.querySelectorAll('.hybrid-body');
-        if (hybridBodies.length > 0) {
-          const lastBody = hybridBodies[hybridBodies.length - 1];
-          lastBody.textContent = currentTurn.hybrid.text;
-          
-          // Auto-scroll
+    window.api.sendPrompt(promptText, activeModels);
+  };
+
+  // 3. LLM Replies
+  window.api.onReplyReceived((data) => {
+    const currentTurn = turns[turns.length - 1];
+    if (currentTurn) {
+      if (data.text) currentTurn.replies[data.model] = data.text;
+      if (!currentTurn.order.includes(data.model)) {
+         currentTurn.order.push(data.model);
+      }
+      currentTurn.hybrid.text = "Synthesizing...";
+      currentTurn.hybrid.reason = "Running local OpenVINO model...";
+      renderAll(); 
+    }
+  });
+
+  // 4. Hybrid Stream
+  window.api.onHybridStream((chunk) => {
+    const currentTurn = turns[turns.length - 1];
+    if (currentTurn && currentTurn.hybrid) {
+      if (currentTurn.hybrid.text.includes("Running local OpenVINO") || currentTurn.hybrid.text === "Synthesizing...") {
+        currentTurn.hybrid.text = "";
+      }
+      currentTurn.hybrid.text += chunk;
+      
+      const allTurns = document.querySelectorAll('.turn');
+      if (allTurns.length > 0) {
+        const lastTurn = allTurns[allTurns.length - 1];
+        const hybridBody = lastTurn.querySelector('.hybrid-body');
+        if (hybridBody) {
+          hybridBody.textContent = currentTurn.hybrid.text;
           const centerPanel = document.querySelector('.center');
           if (centerPanel) centerPanel.scrollTop = centerPanel.scrollHeight;
         }
       }
-    });
+    }
+  });
 
-    // 4. Listen for when OpenVINO finishes completely
-    window.api.onHybridComplete(() => {
-      const currentTurn = turns[turns.length - 1];
-      if (currentTurn) {
-        // Update the UI data model to clear the 0% and loading text
-        currentTurn.hybrid.score = 100; 
-        currentTurn.hybrid.reason = "Synthesis Complete";
-        
-        // Re-render just the score bar
-        const scoreBars = document.querySelectorAll('.score-bar');
-        if (scoreBars.length > 0) {
-          const lastScoreBar = scoreBars[scoreBars.length - 1];
-          lastScoreBar.className = 'score-bar'; // Removes red/mid classes
-          lastScoreBar.innerHTML = `<span class="pct">🎯 100%</span><span class="reason">Synthesis Complete</span>`;
-        }
+  // 5. Hybrid Complete
+  window.api.onHybridComplete(() => {
+    const currentTurn = turns[turns.length - 1];
+    if (currentTurn) {
+      currentTurn.hybrid.score = 100; 
+      currentTurn.hybrid.reason = "Synthesis Complete";
+      
+      const scoreBars = document.querySelectorAll('.score-bar');
+      if (scoreBars.length > 0) {
+        const lastScoreBar = scoreBars[scoreBars.length - 1];
+        lastScoreBar.className = 'score-bar'; 
+        lastScoreBar.innerHTML = `<span class="pct">🎯 100%</span><span class="reason">Synthesis Complete</span>`;
       }
-    });
+    }
+  });
 
 </script>
 </body>

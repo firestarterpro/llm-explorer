@@ -1,11 +1,8 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
-const { chromium } = require('playwright');
 const { spawn } = require('child_process');
-
-// Independent profile folders to prevent Playwright lock conflicts
-const GOOGLE_USER_DATA = path.join(__dirname, 'user_data_google');
-const BRAVE_USER_DATA = path.join(__dirname, 'user_data_brave');
+const { chromium } = require('playwright');
+const scrapers = require('./scrapers');
 
 const PYTHON_SCRIPT_PATH = 'C:\\llm\\src\\synthesize.py';
 const PYTHON_EXE = 'C:\\llm\\ov_env\\Scripts\\python.exe';
@@ -23,128 +20,27 @@ function createWindow() {
   win.loadFile('index.html');
 }
 
-// --- GOOGLE AI MODE SCRAPER ---
-async function scrapeGoogle(promptText, event) {
-  let context;
-  try {
-    context = await chromium.launchPersistentContext(GOOGLE_USER_DATA, {
-      headless: false, 
-      viewport: { width: 1280, height: 800 },
-      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
-    const page = await context.newPage();
-  
-    console.log("Navigating to Google AI Mode...");
-    const encodedPrompt = encodeURIComponent(promptText);
-    await page.goto(`https://www.google.com/search?udm=50&q=${encodedPrompt}`, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    
-    // Check for CAPTCHA
-    const isCaptcha = await page.locator('text="unusual traffic"').count() > 0 || await page.locator('iframe[src*="recaptcha"]').count() > 0;
-    if (isCaptcha) {
-      console.log("CAPTCHA detected. Waiting 30 seconds...");
-      event.reply('reply-received', { model: 'google', text: 'Waiting for CAPTCHA solve...', status: 'loading' });
-      await page.waitForTimeout(30000); 
+// --- QUEUE SYSTEM (Max 3 concurrent browsers to prevent RAM crash) ---
+async function runConcurrent(tasks, limit = 3) {
+  const executing = new Set();
+  for (const task of tasks) {
+    const p = Promise.resolve().then(() => task());
+    executing.add(p);
+    const clean = () => executing.delete(p);
+    p.then(clean, clean);
+    if (executing.size >= limit) {
+      await Promise.race(executing);
     }
-
-    let previousText = "";
-    let stableCount = 0;
-    let attempts = 0;
-
-    // Resilient polling for text stability
-    while (stableCount < 3 && attempts < 15) {
-      const currentText = await page.evaluate(() => {
-        // Try the main content area, then the search results, then the whole body
-        const main = document.querySelector('div[role="main"]') || document.querySelector('#search') || document.body;
-        return main ? main.innerText : "";
-      }).catch(() => "");
-
-      if (currentText === previousText && currentText.length > 50) {
-        stableCount++;
-      } else {
-        stableCount = 0; 
-        previousText = currentText;
-      }
-      await page.waitForTimeout(1000);
-      attempts++;
-    }
-
-    // Clean up known Google UI junk
-    if (previousText) {
-        previousText = previousText
-            .replace("Skip to main content", "")
-            .replace("Accessibility help", "")
-            .replace("AI Mode response is ready", "")
-            .replace("Skip to previous prompt", "")
-            .trim();
-    }
-
-    if (!previousText || previousText.length < 50) throw new Error("Failed to scrape meaningful text.");
-
-    console.log("Google scrape successful!");
-    event.reply('reply-received', { model: 'google', text: previousText, status: 'success' });
-    return previousText;
-  } catch (error) {
-    console.error("Google error:", error);
-    event.reply('reply-received', { model: 'google', text: `Error: ${error.message}`, status: 'error' });
-    return null;
-  } finally {
-    if (context) await context.close();
   }
+  return Promise.allSettled(executing);
 }
 
-// --- BRAVE SEARCH SCRAPER ---
-async function scrapeBrave(promptText, event) {
-  let context;
-  try {
-    context = await chromium.launchPersistentContext(BRAVE_USER_DATA, {
-      headless: false, 
-      viewport: { width: 1280, height: 800 },
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
-    const page = await context.newPage();
-  
-    console.log("Navigating to Brave Search...");
-    await page.goto('https://search.brave.com/ask', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    
-    const inputSelector = 'textarea, input[type="text"], input[type="search"]';
-    await page.waitForSelector(inputSelector, { timeout: 15000 });
-    
-    const formattingSuffix = "\n\nCRITICAL INSTRUCTION: Wrap your entire response inside a markdown code block (```text ... ```). Do not write anything outside of the code block.";
-    const finalPrompt = promptText + formattingSuffix;
-
-    await page.fill(inputSelector, finalPrompt);
-    await page.keyboard.press('Enter');
-    
-    console.log("Waiting for Brave code block...");
-    await page.waitForSelector('pre, code', { timeout: 45000 });
-    await page.waitForTimeout(2000);
-
-    let replyText = await page.locator('pre, code').last().innerText().catch(() => "");
-    if (!replyText || replyText.length < 10) {
-      replyText = await page.locator('.markdown, .prose').last().innerText().catch(() => "Failed to scrape.");
-    }
-
-    // Clean up markdown ticks
-    replyText = replyText.replace(/^```[a-z]*\n/i, '').replace(/\n```$/i, '');
-    
-    console.log("Brave scrape successful!");
-    event.reply('reply-received', { model: 'brave', text: replyText, status: 'success' });
-    return replyText;
-  } catch (error) {
-    console.error("Brave error:", error);
-    event.reply('reply-received', { model: 'brave', text: `Error: ${error.message}`, status: 'error' });
-    return null;
-  } finally {
-    if (context) await context.close();
-  }
-}
-
-// --- RUN THE PYTHON SYNTHESIZER ---
+// --- PYTHON SYNTHESIZER ---
 function runSynthesizer(responses, event) {
   const validResponses = responses.filter(Boolean);
   if (validResponses.length === 0) {
     event.reply('hybrid-stream', '\n[No responses were scraped successfully. Cannot synthesize.]\n');
+    event.reply('hybrid-complete');
     return;
   }
 
@@ -157,37 +53,67 @@ function runSynthesizer(responses, event) {
   pyProcess.stdin.write(inputData);
   pyProcess.stdin.end();
 
-  pyProcess.stdout.on('data', (data) => {
-    event.reply('hybrid-stream', data.toString());
-  });
-
-  pyProcess.stderr.on('data', (data) => {
-    console.error(`Python Error: ${data}`);
-  });
+  pyProcess.stdout.on('data', (data) => event.reply('hybrid-stream', data.toString()));
+  pyProcess.stderr.on('data', (data) => console.error(`Python Error: ${data}`));
 
   pyProcess.on('close', (code) => {
-    console.log(`Python process exited with code ${code}`);
-    // NEW: Tell the UI we are completely done
-    event.reply('hybrid-complete'); 
+    event.reply('hybrid-complete');
   });
 }
 
 app.whenReady().then(() => {
   createWindow();
 
-  ipcMain.on('user-prompt', async (event, promptText) => {
-    // Set both to loading in the UI
-    event.reply('reply-received', { model: 'google', text: 'Scraping...', status: 'loading' });
-    event.reply('reply-received', { model: 'brave', text: 'Scraping...', status: 'loading' });
+  // 1. Handle Chat Prompts
+  ipcMain.on('user-prompt', async (event, promptText, activeModels) => {
+    if (activeModels.length === 0) {
+      event.reply('hybrid-stream', '\n[Please select at least one model.]\n');
+      event.reply('hybrid-complete');
+      return;
+    }
+
+    // Set UI to loading
+    activeModels.forEach(id => {
+      event.reply('reply-received', { model: id, text: 'Scraping...', status: 'loading' });
+    });
+
+    // Create tasks for the queue
+    const tasks = activeModels.map(id => () => scrapers.scrape(id, promptText, event));
+
+    // Run max 3 at a time
+    const results = await runConcurrent(tasks, 3);
     
-    // Run BOTH scrapers in parallel
-    const [googleReply, braveReply] = await Promise.all([
-      scrapeGoogle(promptText, event),
-      scrapeBrave(promptText, event)
-    ]);
+    // Extract successful text responses
+    const textResponses = results
+      .filter(r => r.status === 'fulfilled' && r.value)
+      .map(r => r.value);
+
+    runSynthesizer(textResponses, event);
+  });
+
+  // 2. Handle Login Mode
+  ipcMain.on('login-mode', async (event) => {
+    console.log("Starting Login Mode. Please log into the windows that open.");
     
-    // Pass BOTH to the local synthesizer
-    runSynthesizer([googleReply, braveReply], event);
+    // Sequentially open each provider so RAM doesn't blow up
+    for (const [id, config] of Object.entries(scrapers.providers)) {
+      try {
+        const context = await chromium.launchPersistentContext(path.join(__dirname, `user_data_${id}`), {
+          headless: false,
+          viewport: { width: 1024, height: 768 },
+          args: ['--disable-blink-features=AutomationControlled']
+        });
+        const page = await context.newPage();
+        await page.goto(config.url, { timeout: 60000 }).catch(() => {});
+        
+        // Wait for user to manually close the window
+        await new Promise(resolve => {
+          context.on('close', resolve);
+        });
+      } catch (e) {
+        console.error(`Login failed for ${id}:`, e);
+      }
+    }
   });
 });
 
