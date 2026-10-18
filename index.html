@@ -1,9 +1,10 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Composer — Export Build</title>
+<title>LLM Explorer — Live Demo</title>
 <style>
+  /* [Keep all your exact same CSS from index.html here] */
   :root {
     --bg:#0f1115; --panel:#171a21; --panel-2:#1d2129; --border:#2a2f3a;
     --text:#e6e8ee; --muted:#8a92a6; --accent:#6ea8fe; --accent-2:#4f7dd6;
@@ -19,7 +20,6 @@
     grid-template-rows: auto 1fr auto;
     grid-template-areas: "top top" "left center" "bottom bottom"; }
 
-  /* ---- Top ---- */
   .topbar { grid-area: top; display:flex; align-items:flex-end; gap:8px;
     padding:6px 10px 0; border-bottom:1px solid var(--border); background:var(--panel);
     position:relative; }
@@ -55,7 +55,6 @@
   .legend-drop .legend-item .ico { min-width:24px; font-size:16px; text-align:center; }
   .legend-drop .legend-item .txt { color:var(--muted); line-height:1.4; }
 
-  /* ---- Left ---- */
   .leftbar { grid-area: left; border-right:1px solid var(--border);
     background:var(--panel); padding:10px; overflow-y:auto;
     display:flex; flex-direction:column; gap:10px; }
@@ -115,7 +114,6 @@
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
     padding-top:4px; border-top:1px dashed var(--border); }
 
-  /* ---- Center ---- */
   .center { grid-area: center; overflow-y:auto; padding:18px 24px; }
   .wrap { max-width:900px; margin:0 auto; }
   .turn { margin-bottom:22px; border-left:2px solid transparent;
@@ -190,7 +188,6 @@
   .src-reply .src-reason { font-size:12px; color:var(--muted);
     margin-top:7px; padding-top:6px; border-top:1px dashed var(--border); }
 
-  /* ---- Bottom ---- */
   .bottom { grid-area: bottom; border-top:1px solid var(--border);
     background:var(--panel); padding:10px 14px;
     display:flex; flex-direction:column; gap:7px; }
@@ -250,18 +247,43 @@
 
   ::-webkit-scrollbar { width:9px; height:9px; }
   ::-webkit-scrollbar-thumb { background:#2a2f3a; border-radius:10px; }
+
+  /* DEMO SPECIFIC STYLES */
+  .tour-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(2px);
+  }
+  .tour-box {
+    background: var(--panel-2); border: 2px solid var(--accent);
+    border-radius: 12px; padding: 24px; max-width: 400px; text-align: center;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.8);
+  }
+  .tour-box h2 { color: var(--accent); margin-top: 0; }
+  .tour-box p { color: var(--text); margin-bottom: 20px; line-height: 1.6; }
+  .tour-btn {
+    background: var(--accent); color: #fff; border: none; padding: 10px 20px;
+    border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;
+  }
 </style>
 </head>
 <body>
+
+<!-- DEMO TOUR OVERLAY -->
+<div class="tour-overlay" id="tourOverlay">
+  <div class="tour-box">
+    <h2 id="tourTitle">Welcome to LLM Explorer</h2>
+    <p id="tourText">This is a live demo of a local-first, multi-LLM orchestration cockpit. Let's walk through how it works.</p>
+    <button class="tour-btn" id="tourNextBtn">Next</button>
+  </div>
+</div>
 
 <div class="app">
   <div class="topbar">
     <div class="tabs" id="tabs"></div>
     
-    <!-- NEW BUTTONS -->
-    <button onclick="window.api.startLoginMode()" style="padding: 6px 10px; background: #2196F3; color: white; border: none; border-radius: 6px; cursor: pointer; margin-right: 8px; font-weight: bold; font-size: 13px;">🔐 Login Mode</button>
-    <button onclick="clearChat()" style="padding: 6px 10px; background: #f44336; color: white; border: none; border-radius: 6px; cursor: pointer; margin-right: 12px; font-weight: bold; font-size: 13px;">🗑️ New Chat</button>
-    <!-- END NEW BUTTONS -->
+    <button style="padding: 6px 10px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🔐 Login Mode (Disabled in Demo)</button>
+    <button style="padding: 6px 10px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🗑️ New Chat (Disabled in Demo)</button>
 
     <button class="legend-pill" id="legendPill">📖 legend ▾</button>
     <button class="branch-pill">🌿1 ▾</button>
@@ -278,7 +300,7 @@
     </div>
   </div>
 
-  <div class="leftbar">
+  <div class="leftbar" id="tourLeftbar">
     <div class="lb-section">Token budget</div>
     <div class="master-slider">
       <div class="head">
@@ -301,12 +323,12 @@
     <div class="wrap" id="convWrap"></div>
   </div>
 
-  <div class="bottom">
+  <div class="bottom" id="tourBottom">
     <div class="bottom-inner">
       <div class="history">
         <div class="hs-head">
           <span>📜 History</span><span class="spacer"></span>
-          <span class="meta" id="hsMeta">1 of 2 turns included</span>
+          <span class="meta" id="hsMeta">0 of 0 turns included</span>
         </div>
         <div class="hs-row">
           <div class="hs-preview" id="hsPreview"></div>
@@ -315,13 +337,13 @@
           </div>
         </div>
         <div class="hs-stats">
-          <span>Depth: <strong id="hsDepth">1 turn</strong></span>
+          <span>Depth: <strong id="hsDepth">0 turn</strong></span>
           <span>Context: <strong id="hsTok">0 tok</strong></span>
           <span>Next send: <strong id="hsNext">~0.0s</strong></span>
         </div>
       </div>
 
-      <textarea id="masterText" placeholder="Type once. Sliders set length. Prefixes get prepended on send."></textarea>
+      <textarea id="masterText" placeholder="Follow the tour steps..."></textarea>
 
       <div class="toolbar">
         <button class="primary" id="sendBtn">⚡</button>
@@ -346,6 +368,86 @@
 </div>
 
 <script>
+  // --- MOCK DATA FOR ALL 10 SERVICES ---
+  const MOCK_RESPONSES = {
+    "what does this tool do?": {
+      long: {
+        brave: "This tool is a local-first, multi-LLM orchestration cockpit. It bypasses paid API tokens by using Playwright to physically scrape answers from web interfaces (like Brave Search, Google AI Mode, ChatGPT, etc.). It then passes those raw text blocks to a local Qwen3-8B model running on your own GPU via Intel OpenVINO. The local model acts as a 'Synthesizer'—merging the consensus, flagging contradictions, and generating a Fidelity Log so you know exactly what was kept and what was dropped.",
+        google: "At its core, this application functions as a decentralized AI aggregator. Instead of relying on costly APIs, it utilizes Playwright automation to query your existing web subscriptions. You select the models you want, hit send, and the tool extracts their responses. Subsequently, a local OpenVINO-powered LLM (Qwen3-8B) synthesizes the data based on a strict Fidelity Clause, eliminating hallucinations, removing fluff, and presenting a unified, highly accurate hybrid answer.",
+        chatgpt: "This application acts as a unified interface for multiple AI models. It uses Playwright to automate browser scraping, gathering responses from various web UIs without needing API keys. A local Qwen3-8B model running on Intel hardware then synthesizes these responses using a 'Fidelity Clause' to merge information accurately.",
+        claude: "This tool is an automated, multi-model synthesis engine. It bypasses API costs by using Playwright to extract text directly from web chat interfaces. It then routes the collected data to a local OpenVINO LLM, which merges the outputs into a single hybrid response, complete with a Fidelity Log detailing what was kept, dropped, or disputed.",
+        gemini: "This application serves as an AI aggregator and synthesizer. Users can select from up to ten different web-based language models. The tool autonomously extracts responses from these sites and feeds them into a local Qwen3-8B pipeline. The final output is a synthesized hybrid answer designed to maximize factual consensus while identifying conflicting data points.",
+        deepseek: "This is a Node.js/Electron application utilizing Playwright for DOM-based text extraction from LLM web interfaces. The extracted strings are piped via IPC to a Python backend running OpenVINO. Here, a quantized Qwen3-8B model processes the inputs using a custom prompt architecture (Fidelity Clause) to perform semantic merging, returning a JSON-structured hybrid response.",
+        grok: "Think of this as a boss-level AI turntable. Instead of paying for API tokens, it secretly opens tabs to all your favorite chatbots, copies their homework, and feeds it to a local brain on your GPU. That local model then scrubs out the fluff, stitches the good parts together, and gives you one bulletproof answer without the corporate censorship.",
+        meta: "This tool simplifies how you interact with artificial intelligence by bringing multiple models into one space. It gathers answers from different platforms and uses a local Qwen model to blend them. It's designed for privacy and efficiency, running the final synthesis step entirely on your own hardware so your data stays with you.",
+        copilot: "This application is a professional-grade AI orchestrator. It streamlines research by querying multiple language models simultaneously via browser automation. The collected responses are then processed by a local OpenVINO engine, which applies a strict Fidelity Clause to merge the data into a clean, unified report with a detailed audit log.",
+        perplexity: "This tool functions as a multi-LLM research aggregator. By leveraging Playwright, it extracts current data from various AI search engines and chat interfaces. It then utilizes a local Qwen3-8B model to synthesize the extracted text, cross-referencing claims and producing a final answer with a transparent Fidelity Log to ensure source integrity."
+      },
+      short: {
+        brave: "This is a browser tool that scrapes web AIs and merges them locally.",
+        google: "It is an AI merger that scrapes search engines and synthesizes them.",
+        chatgpt: "It's a custom desktop app that scrapes multiple AIs and uses a local model to merge their answers.",
+        claude: "It's a multi-model text synthesizer that scrapes web chats and merges them using a local GPU.",
+        gemini: "It aggregates AI responses from the web and synthesizes them locally.",
+        deepseek: "It's an Electron/Playwright scraper hooked to a local OpenVINO Python pipeline for text synthesis.",
+        grok: "It's a scraper that steals answers from 10 AIs and makes your local GPU merge them.",
+        meta: "It's a privacy-focused tool that blends answers from multiple AIs using your local hardware.",
+        copilot: "It's an enterprise-ready AI tool that unifies web scrapers and local synthesis.",
+        perplexity: "It's a multi-LLM research tool that aggregates web data and synthesizes it locally."
+      },
+      hybrid: {
+        brave: "This tool is a local-first, multi-LLM orchestration cockpit. By bypassing paid APIs, it uses Playwright to scrape answers from web interfaces and passes them to a local Qwen3-8B model running on your GPU via Intel OpenVINO. It merges consensus, flags contradictions, and generates a Fidelity Log.",
+        google: "This application functions as a decentralized AI aggregator using Playwright automation to query web subscriptions. The extracted responses are synthesized by a local OpenVINO-powered LLM (Qwen3-8B), which applies a strict Fidelity Clause to eliminate fluff, remove hallucinations, and present a highly accurate hybrid answer.",
+        chatgpt: "This tool unifies multiple AI models through Playwright browser automation, gathering responses from web UIs without API keys. A local Qwen3-8B model on Intel hardware then synthesizes these responses using a Fidelity Clause to accurately merge information into one hybrid answer.",
+        claude: "This is an automated, multi-model synthesis engine. It uses Playwright to extract text from web chat interfaces, bypassing API costs. The data is routed to a local OpenVINO LLM, which merges the outputs into a single hybrid response accompanied by a Fidelity Log detailing what was kept, dropped, or disputed.",
+        gemini: "This application serves as an AI aggregator. It autonomously extracts responses from up to ten web-based language models and feeds them into a local Qwen3-8B pipeline. The output is a synthesized hybrid answer designed to maximize factual consensus while identifying conflicting data points.",
+        deepseek: "This is a Node.js/Electron application utilizing Playwright for DOM-based extraction from LLM web interfaces. Extracted strings are piped via IPC to a Python/OpenVINO backend, where a quantized Qwen3-8B model performs semantic merging using a custom Fidelity Clause, returning a hybrid response.",
+        grok: "This is a boss-level AI turntable. It opens tabs to your favorite chatbots, copies their answers, and feeds it to a local GPU brain. The local model scrubs the fluff, stitches the good parts together, and gives you one bulletproof answer without API costs.",
+        meta: "This tool brings multiple AI models into one space. It gathers answers from different platforms and uses a local Qwen model to blend them, running the final synthesis step entirely on your own hardware so your data stays private.",
+        copilot: "This is a professional-grade AI orchestrator. It queries multiple language models simultaneously via browser automation, then processes the responses using a local OpenVINO engine. A strict Fidelity Clause merges the data into a clean, unified report with an audit log.",
+        perplexity: "This tool aggregates research by extracting data from AI search engines and chat interfaces. It utilizes a local Qwen3-8B model to synthesize the text, cross-referencing claims and producing a final answer with a transparent Fidelity Log to ensure source integrity."
+      }
+    },
+    "how does the local synthesis work?": {
+      long: {
+        brave: "The synthesis uses the Fidelity Clause in the system prompt. The local Qwen3-8B model is instructed to act as a sorter, not a truth-judge. It groups overlapping points into [CONSENSUS], flags disagreements into [DISPUTED], and drops redundant text. It runs entirely offline on your Intel Arc GPU at about 16.5 tokens per second.",
+        google: "The local synthesis relies on the OpenVINO GenAI pipeline. Once the scrapers finish, the text is piped to a Python backend running Qwen3-8B-int4. The model is prompted to structure the output into two sections: the 'Synthesized Answer' and the 'Fidelity Log'. This ensures you get a clean, hybrid response while retaining a transparent audit trail of what information was discarded.",
+        chatgpt: "Once all web scrapers return their text, the tool triggers a Python script running the Qwen3-8B model on your local GPU. It feeds the model a system prompt that enforces a 'Fidelity Clause'—a strict set of rules for merging text without hallucinating. The model outputs a unified answer and a log of what it kept and dropped.",
+        claude: "The local synthesis is handled by a quantized Qwen3-8B model running on Intel hardware. It receives the scraped responses and applies the Fidelity Clause: preserving distinct facts, collapsing duplicates, and explicitly flagging contradictions. It then generates a two-part output: the final hybrid answer and a structured log detailing the merge.",
+        gemini: "The synthesis engine is a local OpenVINO pipeline. It takes the multiple text outputs, encodes them, and feeds them into a Qwen3-8B model. The model processes the text based on a Fidelity Clause, which dictates how to handle overlapping or conflicting information, ultimately generating a single, comprehensive answer.",
+        deepseek: "Synthesis is performed by a local Python script invoking `ov_genai.LLMPipeline` with the Qwen3-8B-int4-ov model. The scraped texts are concatenated with `---END---` delimiters and passed via stdin. The model is prompted to parse the text, identify consensus/disputes, and output a JSON-formatted hybrid response, bypassing external API latency.",
+        grok: "The local model is basically the referee. It takes all the scraped text, reads your 'Fidelity Clause' instructions, and gets to work. It strips out the fluff, combines the overlapping facts, and writes one perfect answer. Since it runs on your GPU, it's completely private and costs zero dollars.",
+        meta: "The synthesis phase is fully private. Your laptop's GPU runs a local Qwen model that reads the gathered text. Following the Fidelity Clause, it merges the information into a single response, ensuring that all unique perspectives are kept while redundant or conflicting information is logged for your review.",
+        copilot: "Synthesis is executed by a local OpenVINO runtime. The scraped outputs are aggregated and sent to the Qwen3-8B model. The model applies the Fidelity Clause to merge the data, outputting a standardized report containing the synthesized answer and a fidelity log for full transparency.",
+        perplexity: "The synthesis step is handled by a local Qwen3-8B model. It cross-references the multiple inputs according to the Fidelity Clause, extracting the consensus and identifying any disputes. The final output includes a detailed log of the sources, ensuring the hybrid answer is traceable and reliable."
+      },
+      short: {
+        brave: "A local Qwen3-8B model reads the text and merges it based on the Fidelity Clause.",
+        google: "A local OpenVINO pipeline runs Qwen3-8B to synthesize the text offline.",
+        chatgpt: "A local Python script runs Qwen3-8B to merge the text without hallucinating.",
+        claude: "A quantized Qwen3-8B model merges the text and logs contradictions.",
+        gemini: "A local Qwen3-8B model processes the text and outputs a unified answer.",
+        deepseek: "Python invokes the OpenVINO LLMPipeline to semantically merge the inputs.",
+        grok: "Your GPU runs a local model that refs the answers and makes them into one.",
+        meta: "Your laptop's GPU runs a local model to blend the text privately.",
+        copilot: "A local OpenVINO runtime merges the text into a standardized report.",
+        perplexity: "A local Qwen3-8B model cross-references the inputs and synthesizes them."
+      },
+      hybrid: {
+        brave: "The synthesis uses a Fidelity Clause system prompt. The local Qwen3-8B model acts as a sorter, not a truth-judge. It groups points into [CONSENSUS], flags [DISPUTED] claims, and drops redundant text, all offline on your Intel Arc GPU at 16.5 tokens per second.",
+        google: "The synthesis relies on the OpenVINO GenAI pipeline. Scraped text is piped to a Python backend running Qwen3-8B-int4. The model structures the output into a 'Synthesized Answer' and a 'Fidelity Log', providing a clean hybrid response with a transparent audit trail.",
+        chatgpt: "The tool triggers a local Python script running Qwen3-8B on your GPU. It uses a 'Fidelity Clause'—strict rules for merging text without hallucinating. The model generates a unified answer alongside a log of what was kept and dropped.",
+        claude: "A quantized Qwen3-8B model handles synthesis on Intel hardware. It applies the Fidelity Clause: preserving distinct facts, collapsing duplicates, and flagging contradictions. The output includes the hybrid answer and a structured merge log.",
+        gemini: "The local OpenVINO pipeline encodes the multiple text outputs and feeds them to Qwen3-8B. The model processes the text based on a Fidelity Clause to handle overlapping information and generate a single comprehensive answer.",
+        deepseek: "A local Python script invokes `ov_genai.LLMPipeline` with Qwen3-8B-int4-ov. Scraped texts are delimited and passed via stdin. The model identifies consensus/disputes and outputs a JSON-formatted hybrid response, bypassing external latency.",
+        grok: "The local model acts as a referee. It reads your 'Fidelity Clause', strips the fluff, combines overlapping facts, and writes one perfect answer. It's completely private, runs on your GPU, and costs zero dollars.",
+        meta: "Your laptop's GPU runs a local Qwen model to merge the gathered text. Following the Fidelity Clause, it combines the information into one response while logging redundant or conflicting data for your review.",
+        copilot: "A local OpenVINO runtime aggregates the scraped outputs and sends them to Qwen3-8B. The model applies the Fidelity Clause to merge data into a standardized report containing the synthesized answer and a fidelity log.",
+        perplexity: "A local Qwen3-8B model cross-references the inputs according to the Fidelity Clause. It extracts consensus and flags disputes, producing a hybrid answer with a detailed source log for reliability."
+      }
+    }
+  };
+
   const CH = [
     { id:'brave',      emoji:'🦁0', name:'Brave',      checked:true,  maxTokens:1000, prefixOn:true, style:'Search AI',                     tps:100, ttft:0.5 },
     { id:'google',     emoji:'🔍9', name:'Google AI',  checked:true,  maxTokens:1000, prefixOn:true, style:'AI Mode',                       tps:100, ttft:0.5 },
@@ -386,7 +488,7 @@
   }
   function stripScore(raw) { return raw.replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
 
-  let linked = false; // Unlocked by default
+  let linked = false;
 
   function renderLeft() {
     const list = document.getElementById('llmList');
@@ -455,9 +557,7 @@
     renderLeft(); updateHistory(); updateTimer();
   };
 
-  // START WITH A FRESH SCREEN
   let turns = [];
-
   let activeTab = 'hybrid';
   const openState = {};
   const isOpen = (t, id) => !!openState[t.n + ':' + id];
@@ -615,35 +715,6 @@
 
         el.appendChild(card);
       }
-
-      if (activeTab !== 'hybrid') {
-        const raw = t.replies[activeTab];
-        if (raw) {
-          const parsed = parseScore(raw);
-          const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
-          const body = stripScore(raw);
-          const card = document.createElement('div');
-          card.className = 'hybrid-card';
-          const head3 = document.createElement('div');
-          head3.className = 'hybrid-label';
-          head3.textContent = (CH.find(c => c.id === activeTab) || {}).emoji + ' ' + (CH.find(c => c.id === activeTab) || {}).name;
-          card.appendChild(head3);
-          const bd = document.createElement('div');
-          bd.className = 'hybrid-body';
-          bd.textContent = body;
-          card.appendChild(bd);
-          if (pct != null) {
-            const sb = document.createElement('div');
-            sb.className = 'score-bar ' + scoreClass(pct);
-            sb.innerHTML = `<span class="pct">🎯 ${pct}%</span>
-              <span class="reason">${parsed.reason}</span>`;
-            sb.onclick = (e) => { e.stopPropagation(); sb.classList.toggle('open'); };
-            card.appendChild(sb);
-          }
-          el.appendChild(card);
-        }
-      }
-
       wrap.appendChild(el);
     });
   }
@@ -741,21 +812,7 @@
       ['🪟','Hybrid'],['🌿','Branch'],['▶','Turn'],
       ['🔒','Master lock'],['🎯','Score bar'],['✨','Prefix prepend'],
       ['⊞','Expand all replies'],
-    ],
-    reply: [
-      ['🎯','Score bar — click to expand reason'],
-      ['🤖1','Click any emoji to toggle that reply below'],
-      ['⊞ view sources','Open only the hybrid\'s contributing replies'],
-      ['⊞ expand all','Toggle every reply in the turn'],
-      ['⊘','Omitted replies shown dimmed in the bar'],
-      ['📜','Channel log & timings'],
-    ],
-    summary: [
-      ['🆓','Open summary bench'],
-      ['⚡','Groq'],['🌬️','Mistral'],['🟩','NVIDIA NIM'],['🧠','Cerebras'],
-      ['🔄','OpenRouter free'],['🐘','HuggingFace'],['♊3','Gemini Studio'],
-      ['🕊️','Pollinations (no key)'],
-    ],
+    ]
   };
   function setLegendContext(c) {
     document.getElementById('ctxPill').textContent = c;
@@ -783,109 +840,140 @@
     }
   });
 
-  document.getElementById('sendBtn').onclick = startSend;
-  document.getElementById('freeBtn').onclick = (e) => {
-    e.currentTarget.classList.toggle('on');
-    sbStatus.textContent = e.currentTarget.classList.contains('on') ? '🆓 summary bench' : 'idle';
-    if (e.currentTarget.classList.contains('on')) setLegendContext('summary');
-  };
-
   function renderAll() { renderTabs(); renderConv(); }
   renderLeft(); renderAll(); updateHistory(); updateTimer();
   setLegendContext('idle');
 
-
   // ==========================================
-  // --- LIVE ELECTRON INTEGRATION ---
+  // --- DEMO SIMULATION LOGIC ---
   // ==========================================
 
-  // 1. Clear Chat function
-  window.clearChat = () => {
-    turns = []; // Clear global state
-    renderAll();
-    document.getElementById('convWrap').innerHTML = ''; // clear DOM
-    updateHistory();
+  let tourStep = 0;
+  const tourOverlay = document.getElementById('tourOverlay');
+  const tourTitle = document.getElementById('tourTitle');
+  const tourText = document.getElementById('tourText');
+  const tourNextBtn = document.getElementById('tourNextBtn');
+  
+  function highlight(elId) {
+    document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
+    if(elId) {
+       const el = document.getElementById(elId);
+       if(el) el.style.boxShadow = "0 0 0 4px var(--accent)";
+    }
+  }
+
+  tourNextBtn.onclick = () => {
+    tourStep++;
+    if(tourStep === 1) {
+      tourTitle.textContent = "1. Select Your AI Models";
+      tourText.textContent = "On the left, you can check up to 10 different AI models. For this demo, Brave and Google AI are selected.";
+      highlight('tourLeftbar');
+    } else if (tourStep === 2) {
+      tourTitle.textContent = "2. Set the Token Budget";
+      tourText.textContent = "Notice the sliders. If you drag them down, the AI gives a very short answer. If you leave them on ∞, it gives a full, detailed response.";
+      highlight('tourLeftbar');
+    } else if (tourStep === 3) {
+      tourTitle.textContent = "3. Send the Prompt";
+      tourText.textContent = "Now type exactly: 'what does this tool do?' into the prompt box below and click the ⚡ Send button!";
+      highlight('tourBottom');
+      tourOverlay.style.display = 'none';
+      
+      // Auto-fill the prompt for them to make it easy
+      document.getElementById('masterText').value = "what does this tool do?";
+      document.getElementById('masterText').style.boxShadow = "0 0 15px var(--accent)";
+    }
   };
 
-  // 2. Send Button
-  document.getElementById('sendBtn').onclick = () => {
-    const promptText = document.getElementById('masterText').value;
-    if (!promptText.trim()) return;
+  let demoPhase = 0;
 
-    // Get the checked models
+  document.getElementById('sendBtn').onclick = () => {
+    const promptText = document.getElementById('masterText').value.trim().toLowerCase();
+    if (!promptText) return;
+
+    // If they typed something else, just force it for the demo
+    if(demoPhase === 0 && promptText !== "what does this tool do?") {
+      document.getElementById('masterText').value = "what does this tool do?";
+      return alert("Please type exactly: 'what does this tool do?' to run the demo.");
+    }
+
+    document.getElementById('masterText').style.boxShadow = "none";
+    document.getElementById('masterText').value = '';
+
     const activeModels = CH.filter(c => c.checked).map(c => c.id);
     if (activeModels.length === 0) return alert("Select at least one model.");
 
-    // Create a new turn
     const newTurn = {
       n: turns.length + 1,
-      prompt: promptText,
+      prompt: document.getElementById('masterText').value || (demoPhase === 0 ? "what does this tool do?" : "how does the local synthesis work?"),
       replies: {},
       order: activeModels,
       times: {},
       hybrid: { text: "Waiting for LLMs...", sources: activeModels, score: 0, reason: "" }
     };
+    
+    // If demoPhase 0, the textbox was just cleared, so grab the forced text
+    if (demoPhase === 0) newTurn.prompt = "what does this tool do?";
+    if (demoPhase === 1) newTurn.prompt = "how does the local synthesis work?";
 
     turns.push(newTurn);
-    document.getElementById('masterText').value = '';
     renderAll(); 
     updateTimer(); 
-    startSend(); // Starts the visual loading bar at the bottom
+    startSend();
 
-    window.api.sendPrompt(promptText, activeModels);
-  };
-
-  // 3. LLM Replies
-  window.api.onReplyReceived((data) => {
-    const currentTurn = turns[turns.length - 1];
-    if (currentTurn) {
-      if (data.text) currentTurn.replies[data.model] = data.text;
-      if (!currentTurn.order.includes(data.model)) {
-         currentTurn.order.push(data.model);
-      }
-      currentTurn.hybrid.text = "Synthesizing...";
-      currentTurn.hybrid.reason = "Running local OpenVINO model...";
-      renderAll(); 
-    }
-  });
-
-  // 4. Hybrid Stream
-  window.api.onHybridStream((chunk) => {
-    const currentTurn = turns[turns.length - 1];
-    if (currentTurn && currentTurn.hybrid) {
-      if (currentTurn.hybrid.text.includes("Running local OpenVINO") || currentTurn.hybrid.text === "Synthesizing...") {
-        currentTurn.hybrid.text = "";
-      }
-      currentTurn.hybrid.text += chunk;
+    // MOCK SCRAPING DELAY
+    setTimeout(() => {
+      let hasLong = false;
+      activeModels.forEach(id => {
+        const c = CH.find(x => x.id === id);
+        // Use short if slider <= 400, else use long
+        const isShort = c.maxTokens <= 400;
+        if(!isShort) hasLong = true;
+        
+        const textObj = MOCK_RESPONSES[newTurn.prompt];
+        const responseText = isShort ? textObj.short[id] : textObj.long[id];
+        
+        newTurn.replies[id] = responseText + "\n\nSCORE: 9/10\nREASON: Accurately described the tool.";
+      });
       
-      const allTurns = document.querySelectorAll('.turn');
-      if (allTurns.length > 0) {
-        const lastTurn = allTurns[allTurns.length - 1];
-        const hybridBody = lastTurn.querySelector('.hybrid-body');
-        if (hybridBody) {
-          hybridBody.textContent = currentTurn.hybrid.text;
-          const centerPanel = document.querySelector('.center');
-          if (centerPanel) centerPanel.scrollTop = centerPanel.scrollHeight;
+      newTurn.hybrid.text = "Synthesizing...";
+      newTurn.hybrid.reason = "Running local OpenVINO model...";
+      renderAll();
+      
+      // MOCK SYNTHESIS DELAY
+      setTimeout(() => {
+        // Build the hybrid text based on the selected models
+        let hybridText = "";
+        activeModels.forEach(id => {
+           const c = CH.find(x => x.id === id);
+           const isShort = c.maxTokens <= 400;
+           const textObj = MOCK_RESPONSES[newTurn.prompt].hybrid;
+           hybridText += (isShort ? textObj.short[id] : textObj.long[id]) + " ";
+        });
+        
+        newTurn.hybrid.text = hybridText.trim();
+        newTurn.hybrid.score = 100;
+        newTurn.hybrid.reason = "Synthesis Complete";
+        
+        renderAll();
+        
+        // TRIGGER FOLLOW-UP
+        if(demoPhase === 0) {
+          demoPhase = 1;
+          setTimeout(() => {
+            document.getElementById('masterText').value = "how does the local synthesis work?";
+            document.getElementById('masterText').style.boxShadow = "0 0 15px var(--green)";
+            
+            // Auto-click send after 3 seconds
+            setTimeout(() => {
+               if(document.getElementById('masterText').value === "how does the local synthesis work?") {
+                  document.getElementById('sendBtn').click();
+               }
+            }, 3000);
+          }, 2000);
         }
-      }
-    }
-  });
-
-  // 5. Hybrid Complete
-  window.api.onHybridComplete(() => {
-    const currentTurn = turns[turns.length - 1];
-    if (currentTurn) {
-      currentTurn.hybrid.score = 100; 
-      currentTurn.hybrid.reason = "Synthesis Complete";
-      
-      const scoreBars = document.querySelectorAll('.score-bar');
-      if (scoreBars.length > 0) {
-        const lastScoreBar = scoreBars[scoreBars.length - 1];
-        lastScoreBar.className = 'score-bar'; 
-        lastScoreBar.innerHTML = `<span class="pct">🎯 100%</span><span class="reason">Synthesis Complete</span>`;
-      }
-    }
-  });
+      }, 2000);
+    }, 1500);
+  };
 
 </script>
 </body>
