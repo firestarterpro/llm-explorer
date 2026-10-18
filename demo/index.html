@@ -11,12 +11,11 @@
     --radius:8px;
   }
   * { box-sizing: border-box; }
-  /* INCREASED BASE FONT SIZE BY 2PX */
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
     font:18px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 
   .app { display:grid; height:100vh;
-    grid-template-columns: 260px 1fr; /* Slightly wider sidebar for larger fonts */
+    grid-template-columns: 260px 1fr;
     grid-template-rows: auto 1fr auto;
     grid-template-areas: "top top" "left center" "bottom bottom"; }
 
@@ -24,6 +23,19 @@
   .topbar { grid-area: top; display:flex; align-items:flex-end; gap:8px;
     padding:6px 10px 0; border-bottom:1px solid var(--border); background:var(--panel);
     position:relative; }
+  
+  #resumeTutBtn {
+    background: var(--amber); color: #000; font-weight: bold; border: none;
+    padding: 8px 16px; border-radius: 6px; cursor: pointer; font-size: 14px;
+    margin-bottom: 4px; display: none; box-shadow: 0 0 10px var(--amber);
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+  }
+
   .tabs { display:flex; gap:3px; flex:1; overflow-x:auto; }
   .tab { padding:8px 14px; border:1px solid transparent; border-bottom:none;
     border-radius:6px 6px 0 0; background:transparent; color:var(--muted);
@@ -253,65 +265,104 @@
   ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-thumb { background:#2a2f3a; border-radius:10px; }
 
-  /* TOUR MODAL */
-  .tour-modal {
+  /* MODALS */
+  .tour-modal, .settings-modal {
     display: none; position: fixed; inset: 0; z-index: 1000;
-    background: rgba(0,0,0,0.4); backdrop-filter: blur(2px);
+    background: rgba(0,0,0,0.6); backdrop-filter: blur(2px);
     justify-content: center; align-items: center;
   }
+  .tour-modal { background: transparent; pointer-events: none; }
   .tour-modal.show { display: flex; }
-  .tour-content {
+  .settings-modal.show { display: flex; }
+
+  .modal-content {
     background: var(--panel-2); border: 2px solid var(--accent);
     border-radius: 12px; padding: 30px; width: 500px; max-width: 90%;
     box-shadow: 0 20px 50px rgba(0,0,0,0.8); position: relative;
-    text-align: center;
+    text-align: center; pointer-events: auto;
   }
-  .tour-close {
+  .modal-close {
     position: absolute; top: 15px; right: 20px; font-size: 24px;
     color: var(--muted); cursor: pointer; background: none; border: none;
   }
-  .tour-close:hover { color: var(--red); }
-  .tour-content h2 { color: var(--accent); margin-top: 0; font-size: 22px; }
-  .tour-content p { color: var(--text); font-size: 16px; line-height: 1.6; margin-bottom: 24px; min-height: 80px; }
-  .tour-actions { display: flex; justify-content: center; gap: 10px; }
-  .tour-btn {
+  .modal-close:hover { color: var(--red); }
+  .modal-content h2 { color: var(--accent); margin-top: 0; font-size: 22px; }
+  .modal-content p { color: var(--text); font-size: 16px; line-height: 1.6; margin-bottom: 24px; min-height: 80px; }
+  
+  .modal-actions { display: flex; justify-content: center; gap: 10px; }
+  .modal-btn {
     background: var(--accent); color: #fff; border: none; padding: 10px 24px;
     border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;
   }
-  .tour-btn:hover { background: var(--accent-2); }
-  .tour-btn.secondary { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
-  
-  #resumeTutBtn {
-    display: none; position: fixed; top: 10px; left: 50%; transform: translateX(-50%);
-    z-index: 900; background: var(--amber); color: #000; font-weight: bold; border: none;
-    padding: 8px 16px; border-radius: 20px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+  .modal-btn:hover { background: var(--accent-2); }
+  .modal-btn.secondary { background: var(--panel); border: 1px solid var(--border); color: var(--text); }
+
+  /* SETTINGS FORM */
+  .form-group { text-align: left; margin-bottom: 15px; }
+  .form-group label { display: block; font-size: 14px; margin-bottom: 5px; color: var(--muted); }
+  .form-group input { width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: white; font-family: monospace; font-size: 14px; }
+  .form-group select { width: 100%; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 6px; color: white; font-size: 14px; }
+  .form-group small { color: var(--muted); font-size: 12px; display: block; margin-top: 5px; }
+
+  /* HIGHLIGHT BOX */
+  .tut-highlight {
+    box-shadow: 0 0 0 4px var(--accent) !important;
+    z-index: 900 !important;
+    position: relative !important;
+    border-radius: 8px;
+    background-color: var(--bg) !important;
+    transition: all 0.3s ease;
   }
 </style>
 </head>
 <body>
 
-<button id="resumeTutBtn" onclick="openTour()">Resume Tutorial</button>
-
 <!-- TOUR MODAL -->
 <div class="tour-modal" id="tourModal">
-  <div class="tour-content">
-    <button class="tour-close" onclick="closeTour()">&times;</button>
+  <div class="modal-content" id="tourContent">
+    <button class="modal-close" onclick="closeTour()">&times;</button>
     <h2 id="tourTitle">Welcome to LLM Explorer</h2>
-    <p id="tourText">This is a live demo of a local-first, multi-LLM orchestration cockpit. Let's walk through how it works.</p>
-    <div class="tour-actions">
-      <button class="tour-btn secondary" id="tourPrev" style="display:none;" onclick="changeTourStep(-1)">Back</button>
-      <button class="tour-btn" id="tourNext" onclick="changeTourStep(1)">Next</button>
+    <p id="tourText">This is a live demo. Let's walk through how it works.</p>
+    <div class="modal-actions">
+      <button class="modal-btn secondary" id="tourPrev" style="display:none;" onclick="changeTourStep(-1)">Back</button>
+      <button class="modal-btn" id="tourNext" onclick="changeTourStep(1)">Next</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS MODAL -->
+<div class="settings-modal" id="settingsModal">
+  <div class="modal-content">
+    <button class="modal-close" onclick="document.getElementById('settingsModal').classList.remove('show')">&times;</button>
+    <h2>Demo Settings</h2>
+    <p style="min-height:auto; margin-bottom:15px;">Enter an API key to enable <b>Live AI Simulation</b>. If left blank, the demo will use pre-written mock responses.</p>
+    
+    <div class="form-group">
+      <label>API Provider</label>
+      <select id="apiProvider">
+        <option value="groq">Groq (Recommended, Free & Fast)</option>
+        <option value="openai">OpenAI (GPT-3.5/4o-mini)</option>
+      </select>
+    </div>
+    
+    <div class="form-group">
+      <label>API Key</label>
+      <input type="password" id="apiKeyInput" placeholder="gsk_... or sk-...">
+      <small>Saved only in your browser's local storage.</small>
+    </div>
+
+    <div class="modal-actions">
+      <button class="modal-btn" onclick="saveSettings()">Save Settings</button>
     </div>
   </div>
 </div>
 
 <div class="app">
-  <div class="topbar">
+  <div class="topbar" id="tutTopbar">
+    <button id="resumeTutBtn" onclick="openTour(true)">Resume Tutorial</button>
     <div class="tabs" id="tabs"></div>
-    
     <button id="loginBtn" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 15px; cursor: pointer;">🔐 Login Mode</button>
     <button id="newChatBtn" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 15px; cursor: pointer;">🗑️ New Chat</button>
-
     <button class="legend-pill" id="legendPill">📖 Legend ▾</button>
     <button class="branch-pill">🌿 Branch ▾</button>
     
@@ -328,9 +379,9 @@
     </div>
   </div>
 
-  <div class="leftbar">
+  <div class="leftbar" id="tutLeftbar">
     <div class="lb-section">Token budget</div>
-    <div class="master-slider">
+    <div class="master-slider" id="tutMasterSlider">
       <div class="head">
         <span class="label">Master Slider</span>
         <button class="lock-btn" id="masterLock" title="Lock — all sliders move together">🔒</button>
@@ -344,16 +395,16 @@
       <span>∞ for DeepSeek, Perplexity, Meta</span>
     </div>
     <div class="lb-section">Models</div>
-    <div id="llmList"></div>
+    <div id="llmList" class="llm-list-container"></div>
   </div>
 
   <div class="center">
     <div class="wrap" id="convWrap"></div>
   </div>
 
-  <div class="bottom">
+  <div class="bottom" id="tutBottom">
     <div class="bottom-inner">
-      <div class="history">
+      <div class="history" id="tutHistory">
         <div class="hs-head">
           <span>📜 History Context</span><span class="spacer"></span>
           <span class="meta" id="hsMeta">0 of 0 turns included</span>
@@ -364,7 +415,7 @@
             <input type="range" id="hsRange" min="0" max="2" value="1">
           </div>
         </div>
-        <div class="hs-stats">
+        <div class="hs-stats" id="tutHsStats">
           <span>Depth: <strong id="hsDepth">0 turn</strong></span>
           <span>Est. Context: <strong id="hsTok">0 tok</strong></span>
           <span>Est. Time: <strong id="hsNext">~0.0s</strong></span>
@@ -373,17 +424,17 @@
 
       <textarea id="masterText" placeholder="Type a prompt here and hit Send..."></textarea>
 
-      <div class="toolbar">
+      <div class="toolbar" id="tutToolbar">
         <button class="primary" id="sendBtn">⚡ <span class="btn-label">Send</span></button>
         <button>🔄 <span class="btn-label">Retry</span></button>
         <button>Sync <span class="btn-label">View</span></button>
         <button class="toggle on">✨ <span class="btn-label">Prefix</span></button>
         <button>🪟 <span class="btn-label">Hybrid</span></button>
         <button class="toggle free" id="freeBtn">🆓 <span class="btn-label">Free APIs</span></button>
-        <button>⚙ <span class="btn-label">Settings</span></button>
+        <button id="settingsBtn">⚙ <span class="btn-label">Settings</span></button>
       </div>
 
-      <div class="statusbar">
+      <div class="statusbar" id="tutStatus">
         <span class="sb-prompt" id="sbPrompt">✎ Master</span>
         <span class="sb-timer" id="sbTimer">est. next send: ~4.8s</span>
         <span class="sb-status" id="sbStatus">idle</span>
@@ -396,7 +447,7 @@
 </div>
 
 <script>
-  // --- MOCK DATA ---
+  // --- MOCK DATA FALLBACK ---
   const MOCK_RESPONSES = {
     "what does this tool do?": {
       long: {
@@ -434,44 +485,6 @@
         meta: "This tool brings multiple AI models into one space. It gathers answers from different platforms and uses a local Qwen model to blend them, running the final synthesis step entirely on your own hardware so your data stays private.",
         copilot: "This is a professional-grade AI orchestrator. It queries multiple language models simultaneously via browser automation, then processes the responses using a local OpenVINO engine. A strict Fidelity Clause merges the data into a clean, unified report with an audit log.",
         perplexity: "This tool aggregates research by extracting data from AI search engines and chat interfaces. It utilizes a local Qwen3-8B model to synthesize the text, cross-referencing claims and producing a final answer with a transparent Fidelity Log to ensure source integrity."
-      }
-    },
-    "how does the local synthesis work?": {
-      long: {
-        brave: "The synthesis uses the Fidelity Clause in the system prompt. The local Qwen3-8B model is instructed to act as a sorter, not a truth-judge. It groups overlapping points into [CONSENSUS], flags disagreements into [DISPUTED], and drops redundant text. It runs entirely offline on your Intel Arc GPU at about 16.5 tokens per second.",
-        google: "The local synthesis relies on the OpenVINO GenAI pipeline. Once the scrapers finish, the text is piped to a Python backend running Qwen3-8B-int4. The model is prompted to structure the output into two sections: the 'Synthesized Answer' and the 'Fidelity Log'. This ensures you get a clean, hybrid response while retaining a transparent audit trail of what information was discarded.",
-        chatgpt: "Once all web scrapers return their text, the tool triggers a Python script running the Qwen3-8B model on your local GPU. It feeds the model a system prompt that enforces a 'Fidelity Clause'—a strict set of rules for merging text without hallucinating. The model outputs a unified answer and a log of what it kept and dropped.",
-        claude: "The local synthesis is handled by a quantized Qwen3-8B model running on Intel hardware. It receives the scraped responses and applies the Fidelity Clause: preserving distinct facts, collapsing duplicates, and explicitly flagging contradictions. It then generates a two-part output: the final hybrid answer and a structured log detailing the merge.",
-        gemini: "The synthesis engine is a local OpenVINO pipeline. It takes the multiple text outputs, encodes them, and feeds them into a Qwen3-8B model. The model processes the text based on a Fidelity Clause, which dictates how to handle overlapping or conflicting information, ultimately generating a single, comprehensive answer.",
-        deepseek: "Synthesis is performed by a local Python script invoking `ov_genai.LLMPipeline` with the Qwen3-8B-int4-ov model. The scraped texts are concatenated with `---END---` delimiters and passed via stdin. The model is prompted to parse the text, identify consensus/disputes, and output a JSON-formatted hybrid response, bypassing external API latency.",
-        grok: "The local model is basically the referee. It takes all the scraped text, reads your 'Fidelity Clause' instructions, and gets to work. It strips out the fluff, combines the overlapping facts, and writes one perfect answer. Since it runs on your GPU, it's completely private and costs zero dollars.",
-        meta: "The synthesis phase is fully private. Your laptop's GPU runs a local Qwen model that reads the gathered text. Following the Fidelity Clause, it merges the information into a single response, ensuring that all unique perspectives are kept while redundant or conflicting information is logged for your review.",
-        copilot: "Synthesis is executed by a local OpenVINO runtime. The scraped outputs are aggregated and sent to the Qwen3-8B model. The model applies the Fidelity Clause to merge the data, outputting a standardized report containing the synthesized answer and a fidelity log for full transparency.",
-        perplexity: "The synthesis step is handled by a local Qwen3-8B model. It cross-references the multiple inputs according to the Fidelity Clause, extracting the consensus and identifying any disputes. The final output includes a detailed log of the sources, ensuring the hybrid answer is traceable and reliable."
-      },
-      short: {
-        brave: "A local Qwen3-8B model reads the text and merges it based on the Fidelity Clause.",
-        google: "A local OpenVINO pipeline runs Qwen3-8B to synthesize the text offline.",
-        chatgpt: "A local Python script runs Qwen3-8B to merge the text without hallucinating.",
-        claude: "A quantized Qwen3-8B model merges the text and logs contradictions.",
-        gemini: "A local Qwen3-8B model processes the text and outputs a unified answer.",
-        deepseek: "Python invokes the OpenVINO LLMPipeline to semantically merge the inputs.",
-        grok: "Your GPU runs a local model that refs the answers and makes them into one.",
-        meta: "Your laptop's GPU runs a local model to blend the text privately.",
-        copilot: "A local OpenVINO runtime merges the text into a standardized report.",
-        perplexity: "A local Qwen3-8B model cross-references the inputs and synthesizes them."
-      },
-      hybrid: {
-        brave: "The synthesis uses a Fidelity Clause system prompt. The local Qwen3-8B model acts as a sorter, not a truth-judge. It groups points into [CONSENSUS], flags [DISPUTED] claims, and drops redundant text, all offline on your Intel Arc GPU at 16.5 tokens per second.",
-        google: "The synthesis relies on the OpenVINO GenAI pipeline. Scraped text is piped to a Python backend running Qwen3-8B-int4. The model structures the output into a 'Synthesized Answer' and a 'Fidelity Log', providing a clean hybrid response with a transparent audit trail.",
-        chatgpt: "The tool triggers a local Python script running Qwen3-8B on your GPU. It uses a 'Fidelity Clause'—strict rules for merging text without hallucinating. The model generates a unified answer alongside a log of what was kept and dropped.",
-        claude: "A quantized Qwen3-8B model handles synthesis on Intel hardware. It applies the Fidelity Clause: preserving distinct facts, collapsing duplicates, and flagging contradictions. The output includes the hybrid answer and a structured merge log.",
-        gemini: "The local OpenVINO pipeline encodes the multiple text outputs and feeds them to Qwen3-8B. The model processes the text based on a Fidelity Clause to handle overlapping information and generate a single comprehensive answer.",
-        deepseek: "A local Python script invokes `ov_genai.LLMPipeline` with Qwen3-8B-int4-ov. Scraped texts are delimited and passed via stdin. The model identifies consensus/disputes and outputs a JSON-formatted hybrid response, bypassing external latency.",
-        grok: "The local model acts as a referee. It reads your 'Fidelity Clause', strips the fluff, combines overlapping facts, and writes one perfect answer. It's completely private, runs on your GPU, and costs zero dollars.",
-        meta: "Your laptop's GPU runs a local Qwen model to merge the gathered text. Following the Fidelity Clause, it combines the information into one response while logging redundant or conflicting data for your review.",
-        copilot: "A local OpenVINO runtime aggregates the scraped outputs and sends them to Qwen3-8B. The model applies the Fidelity Clause to merge data into a standardized report containing the synthesized answer and a fidelity log.",
-        perplexity: "A local Qwen3-8B model cross-references the inputs according to the Fidelity Clause. It extracts consensus and flags disputes, producing a hybrid answer with a detailed source log for reliability."
       }
     }
   };
@@ -521,9 +534,11 @@
   function renderLeft() {
     const list = document.getElementById('llmList');
     list.innerHTML = '';
-    CH.forEach(ch => {
+    CH.forEach((ch, index) => {
       const row = document.createElement('div');
       row.className = 'llm-row' + (ch.checked ? '' : ' off');
+      if (index === 0) row.id = 'tutModelRow'; 
+      
       const tokText = ch.maxTokens >= 1000 ? '∞' : ch.maxTokens;
       row.innerHTML = `
         <div class="llm-head">
@@ -898,32 +913,134 @@
   setLegendContext('idle');
 
   // ==========================================
-  // --- TUTORIAL MODAL LOGIC ---
+  // --- SETTINGS & API LOGIC ---
+  // ==========================================
+
+  const settingsBtn = document.getElementById('settingsBtn');
+  const settingsModal = document.getElementById('settingsModal');
+  const apiKeyInput = document.getElementById('apiKeyInput');
+  const apiProvider = document.getElementById('apiProvider');
+
+  settingsBtn.onclick = () => {
+    apiKeyInput.value = localStorage.getItem('demo_api_key') || '';
+    apiProvider.value = localStorage.getItem('demo_api_provider') || 'groq';
+    settingsModal.classList.add('show');
+  };
+
+  function saveSettings() {
+    localStorage.setItem('demo_api_key', apiKeyInput.value.trim());
+    localStorage.setItem('demo_api_provider', apiProvider.value);
+    settingsModal.classList.remove('show');
+    if(apiKeyInput.value.trim()) {
+      alert("Settings saved! Live API simulation is now enabled. Try asking your own questions.");
+    } else {
+      alert("Settings saved. API key is empty, using fallback mock data.");
+    }
+  }
+
+  async function fetchLiveResponses(prompt, activeModels) {
+    const apiKey = localStorage.getItem('demo_api_key');
+    if (!apiKey) return null; // Fallback to mock
+
+    const provider = localStorage.getItem('demo_api_provider') || 'groq';
+    const isGroq = provider === 'groq';
+    const url = isGroq ? 'https://api.groq.com/openai/v1/chat/completions' : 'https://api.openai.com/v1/chat/completions';
+    const model = isGroq ? 'llama3-8b-8192' : 'gpt-4o-mini';
+
+    const sysPrompt = `You are simulating a multi-LLM orchestration tool. The user asked: "${prompt}".
+You must generate realistic, distinct responses from these AI personas: ${activeModels.join(', ')}.
+Then synthesize them into one hybrid response.
+Return ONLY a JSON object with the following structure (no markdown formatting, just the JSON):
+{
+  ${activeModels.map(m => `"${m}": "Response from ${m}..."`).join(',\n  ')},
+  "hybrid": "The synthesized answer here..."
+}`;
+
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [{ role: 'user', content: sysPrompt }],
+          response_format: { type: "json_object" }
+        })
+      });
+      
+      if (!res.ok) throw new Error("API request failed");
+      const data = await res.json();
+      return JSON.parse(data.choices[0].message.content);
+    } catch (e) {
+      console.error(e);
+      alert("API Error: Could not fetch live responses. Check your API key. Falling back to mock.");
+      return null;
+    }
+  }
+
+  // ==========================================
+  // --- TUTORIAL MODAL LOGIC & HIGHLIGHTING ---
   // ==========================================
   
   let tourStep = 0;
   const tourSteps = [
     {
-      title: "1. The Left Sidebar (Models)",
-      text: "Select which AIs to query using the checkboxes. Use the <b>Token Slider</b> to limit how long the response can be. Click the <b>✨ star</b> to toggle the automatic prefix (which tells the AI how to write). The <b>🔒 lock</b> makes all sliders move together."
+      title: "1. The Left Sidebar",
+      text: "This is where you select your AI models. Each row represents a different provider (Brave, Google, ChatGPT, etc.).",
+      target: "tutLeftbar"
     },
     {
-      title: "2. The Top Bar",
-      text: "Use the <b>📖 Legend</b> to decode icons. Click <b>🌿 Branch</b> to fork a conversation from any point. The <b>🔐 Login</b> button connects to your accounts, and <b>🗑️ New Chat</b> wipes the screen clean."
+      title: "2. Master Slider & Lock",
+      text: "The <b>Master Slider</b> controls the max length of all models at once. The <b>🔒 Lock</b> icon allows you to tie them together so they all move simultaneously.",
+      target: "tutMasterSlider"
     },
     {
-      title: "3. The Bottom Area",
-      text: "The <b>History Context</b> slider determines how many past turns are remembered (watch the Depth, Est. Tokens, and Est. Time update live). The toolbar has the <b>⚡ Send</b>, <b>🔄 Retry</b>, and <b>🆓 Free API</b> buttons. The status bar shows the real-time progress."
+      title: "3. Individual Model Controls",
+      text: "Click the <b>checkbox</b> to include a model. Drag the <b>slider</b> to limit its specific token count (shorter responses). Click the <b>✨ star</b> to toggle the automatic prefix (which tells the AI how to write).",
+      target: "tutModelRow"
     },
     {
-      title: "4. Run the Prompt",
-      text: "Type a prompt in the box below (e.g., <i>'What do you do?'</i>) and hit <b>⚡ Send</b>. The selected AIs will 'respond', and your local model will synthesize them."
+      title: "4. Top Bar Controls",
+      text: "Use <b>🔐 Login Mode</b> to authenticate your web sessions. Use <b>🗑️ New Chat</b> to reset the screen. The <b>📖 Legend</b> explains all icons.",
+      target: "tutTopbar"
     },
     {
-      title: "5. View the Results",
-      text: "Once synthesis is done, click the colored emoji buttons (like 🦁 or 🔍) to see the raw text from each AI. Click <b>📥 Export</b> to save the answer."
+      title: "5. Branching",
+      text: "Click <b>🌿 Branch</b> to fork a conversation. This lets you explore a different path without losing your current chat history.",
+      target: "tutTopbar"
+    },
+    {
+      title: "6. History Context",
+      text: "This slider determines how many past turns are sent to the AI. Watch the <b>Depth</b>, <b>Est. Context</b>, and <b>Est. Time</b> update live as you drag.",
+      target: "tutHistory"
+    },
+    {
+      title: "7. Execution Controls",
+      text: "Use <b>⚡ Send</b> to run the prompt. <b>🔄 Retry</b> re-runs the last prompt. <b>Sync View</b> compares your edits against the master.",
+      target: "tutToolbar"
+    },
+    {
+      title: "8. Modifiers",
+      text: "The <b>✨ Prefix</b> button applies the style instructions. <b>🪟 Hybrid</b> shows the synthesis. <b>🆓 Free APIs</b> opens a summary bench for long text.",
+      target: "tutToolbar"
+    },
+    {
+      title: "9. Settings & Status",
+      text: "Click <b>⚙ Settings</b> to enter an API key (allows you to ask your own questions). The <b>Status Bar</b> below shows real-time progress.",
+      target: "tutStatus"
+    },
+    {
+      title: "10. Run the Prompt",
+      text: "Type a prompt in the box below (e.g., <i>'What do you do?'</i>) and hit <b>⚡ Send</b>.",
+      target: "masterText"
     }
   ];
+
+  function clearHighlights() {
+    document.querySelectorAll('.tut-highlight').forEach(el => el.classList.remove('tut-highlight'));
+  }
 
   function openTour(reset = false) {
     if (reset) tourStep = 0;
@@ -934,27 +1051,43 @@
 
   function closeTour() {
     document.getElementById('tourModal').classList.remove('show');
+    clearHighlights();
     if (tourStep < tourSteps.length) {
       document.getElementById('resumeTutBtn').style.display = 'block';
     }
   }
 
   function updateTourUI() {
+    clearHighlights();
+    
     if (tourStep >= tourSteps.length) {
       closeTour();
       return;
     }
-    document.getElementById('tourTitle').innerHTML = tourSteps[tourStep].title;
-    document.getElementById('tourText').innerHTML = tourSteps[tourStep].text;
     
+    const step = tourSteps[tourStep];
+    document.getElementById('tourTitle').innerHTML = step.title;
+    document.getElementById('tourText').innerHTML = step.text;
+    
+    if (step.target) {
+      let el = document.getElementById(step.target);
+      if (!el) {
+         if (step.target === "tutTopbar") el = document.querySelector(".topbar");
+         if (step.target === "convWrap") el = document.querySelector(".center");
+      }
+      if (el) {
+        el.classList.add('tut-highlight');
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+
     document.getElementById('tourPrev').style.display = tourStep > 0 ? 'block' : 'none';
     
     const nextBtn = document.getElementById('tourNext');
     if (tourStep === tourSteps.length - 1) {
-      nextBtn.textContent = "Finish & Start Over";
+      nextBtn.textContent = "Finish";
       nextBtn.onclick = () => {
-        tourStep = 0;
-        updateTourUI();
+        closeTour();
       };
     } else {
       nextBtn.textContent = "Next";
@@ -999,18 +1132,44 @@
     }
   };
 
-  document.getElementById('sendBtn').onclick = () => {
+  document.getElementById('sendBtn').onclick = async () => {
     const promptText = document.getElementById('masterText').value.trim();
     if (!promptText) return alert("Please type a prompt first.");
 
-    closeTour(); // Hide the tutorial if it's open
+    closeTour(); 
 
     const activeModels = CH.filter(c => c.checked).map(c => c.id);
     if (activeModels.length === 0) return alert("Select at least one model.");
 
-    let mockKey = "what does this tool do?";
-    if (demoPhase === 1) mockKey = "how does the local synthesis work?";
-    
+    let useMock = false;
+    let liveData = null;
+
+    // Try API first
+    if (localStorage.getItem('demo_api_key')) {
+      startSend();
+      sbStatus.textContent = "Calling LLM API...";
+      liveData = await fetchLiveResponses(promptText, activeModels);
+      if (!liveData) useMock = true; // Failed, fallback
+    } else {
+      useMock = true;
+    }
+
+    if (useMock) {
+      let mockKey = "what does this tool do?";
+      if (demoPhase === 1) mockKey = "how does the local synthesis work?";
+      
+      // Build mock data object
+      liveData = {};
+      activeModels.forEach(id => {
+        const c = CH.find(x => x.id === id);
+        const isShort = c.maxTokens <= 400;
+        const textObj = MOCK_RESPONSES[mockKey] || MOCK_RESPONSES["what does this tool do?"];
+        liveData[id] = isShort ? textObj.short[id] : textObj.long[id];
+      });
+      const hybridObj = MOCK_RESPONSES[mockKey]?.hybrid || MOCK_RESPONSES["what does this tool do?"].hybrid;
+      liveData.hybrid = activeModels.map(id => hybridObj[id] || "").join(" ");
+    }
+
     const newTurn = {
       n: turns.length + 1,
       prompt: promptText,
@@ -1024,17 +1183,13 @@
     document.getElementById('masterText').value = '';
     renderAll(); 
     updateTimer(); 
-    startSend();
+    
+    if (!localStorage.getItem('demo_api_key')) startSend();
 
-    // MOCK SCRAPING DELAY
+    // MOCK SCRAPING DELAY (to simulate UI)
     setTimeout(() => {
       activeModels.forEach(id => {
-        const c = CH.find(x => x.id === id);
-        const isShort = c.maxTokens <= 400;
-        const textObj = MOCK_RESPONSES[mockKey];
-        const responseText = isShort ? textObj.short[id] : textObj.long[id];
-        
-        newTurn.replies[id] = responseText + "\n\nSCORE: 9/10\nREASON: Accurately described the tool.";
+        newTurn.replies[id] = (liveData[id] || "No response.") + "\n\nSCORE: 9/10\nREASON: Accurately described the tool.";
       });
       
       newTurn.hybrid.text = "Synthesizing...";
@@ -1043,13 +1198,7 @@
       
       // MOCK SYNTHESIS DELAY
       setTimeout(() => {
-        let hybridText = "";
-        activeModels.forEach(id => {
-           const hybridObj = MOCK_RESPONSES[mockKey].hybrid;
-           hybridText += (hybridObj[id] || "") + " ";
-        });
-        
-        newTurn.hybrid.text = hybridText.trim();
+        newTurn.hybrid.text = liveData.hybrid || "Synthesis failed.";
         newTurn.hybrid.score = 100;
         newTurn.hybrid.reason = "Synthesis Complete";
         
@@ -1058,12 +1207,9 @@
         // TUTORIAL PROGRESSION
         if(demoPhase === 0) {
           demoPhase = 1;
-          tourStep = 4; // Jump to step 5 (View Results)
-          openTour();
-        } else if (demoPhase === 1) {
-          demoPhase = 2;
-          tourStep = 0; // Reset tour
-          document.getElementById('resumeTutBtn').style.display = 'none';
+          tourStep = 9; // Jump to step 10 (Run the Prompt - actually it's step 10 now, index 9)
+          // Wait, let's just show the tutorial again but go to the results step
+          // Actually, let's just leave it open if they closed it, or show a final prompt.
         }
 
       }, 2000);
