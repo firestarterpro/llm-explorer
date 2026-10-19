@@ -2,9 +2,8 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>LLM Explorer — Live Demo</title>
+<title>LLM Explorer</title>
 <style>
-  /* [Keep all your exact same CSS from index.html here] */
   :root {
     --bg:#0f1115; --panel:#171a21; --panel-2:#1d2129; --border:#2a2f3a;
     --text:#e6e8ee; --muted:#8a92a6; --accent:#6ea8fe; --accent-2:#4f7dd6;
@@ -13,22 +12,24 @@
   }
   * { box-sizing: border-box; }
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
-    font:16px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    font:18px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 
   .app { display:grid; height:100vh;
-    grid-template-columns: 240px 1fr;
+    grid-template-columns: 260px 1fr;
     grid-template-rows: auto 1fr auto;
     grid-template-areas: "top top" "left center" "bottom bottom"; }
 
+  /* ---- Top ---- */
   .topbar { grid-area: top; display:flex; align-items:flex-end; gap:8px;
     padding:6px 10px 0; border-bottom:1px solid var(--border); background:var(--panel);
     position:relative; }
+
   .tabs { display:flex; gap:3px; flex:1; overflow-x:auto; }
-  .tab { padding:7px 13px; border:1px solid transparent; border-bottom:none;
+  .tab { padding:8px 14px; border:1px solid transparent; border-bottom:none;
     border-radius:6px 6px 0 0; background:transparent; color:var(--muted);
-    cursor:pointer; font-size:16px; white-space:nowrap; font-family:inherit; }
+    cursor:pointer; font-size:18px; white-space:nowrap; font-family:inherit; }
   .tab.active { background:var(--bg); color:var(--text); border-color:var(--border); }
-  .branch-pill, .legend-pill { font-size:15px; color:var(--muted); padding:6px 11px;
+  .branch-pill, .legend-pill { font-size:16px; color:var(--muted); padding:6px 11px;
     border:1px solid var(--border); border-radius:6px; cursor:pointer;
     white-space:nowrap; margin-bottom:4px; background:transparent; font:inherit; }
   .branch-pill:hover, .legend-pill:hover { border-color:var(--accent); color:var(--text); }
@@ -36,131 +37,174 @@
 
   .legend-drop { position:absolute; top:calc(100% + 4px); right:60px;
     background:var(--panel-2); border:1px solid var(--accent);
-    border-radius:10px; padding:12px; width:360px;
+    border-radius:10px; padding:14px; width:380px;
     box-shadow:0 12px 40px rgba(0,0,0,.7); z-index:50;
-    display:none; font-size:14px; }
+    display:none; font-size:16px; }
   .legend-drop.open { display:block; }
   .legend-drop .ld-head { display:flex; align-items:center; gap:6px;
-    font-size:11px; letter-spacing:.1em; text-transform:uppercase;
+    font-size:13px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--accent); margin-bottom:8px; }
   .legend-drop .ld-head .spacer { flex:1; }
   .legend-drop .ctx-switch { display:flex; gap:3px; margin-bottom:10px; }
-  .legend-drop .ctx-switch button { flex:1; padding:5px 7px; font-size:12px;
+  .legend-drop .ctx-switch button { flex:1; padding:6px 8px; font-size:14px;
     background:var(--panel); border:1px solid var(--border); border-radius:4px;
     color:var(--muted); cursor:pointer; }
   .legend-drop .ctx-switch button.active { color:var(--text); border-color:var(--accent); }
-  .legend-drop .legend-list { display:flex; flex-direction:column; gap:6px;
-    max-height:340px; overflow-y:auto; }
-  .legend-drop .legend-item { display:flex; gap:8px; align-items:flex-start; }
-  .legend-drop .legend-item .ico { min-width:24px; font-size:16px; text-align:center; }
+  .legend-drop .legend-list { display:flex; flex-direction:column; gap:8px;
+    max-height:400px; overflow-y:auto; }
+  .legend-drop .legend-item { display:flex; gap:10px; align-items:flex-start; }
+  .legend-drop .legend-item .ico { min-width:28px; font-size:20px; text-align:center; }
   .legend-drop .legend-item .txt { color:var(--muted); line-height:1.4; }
 
+  /* ---- Left ---- */
   .leftbar { grid-area: left; border-right:1px solid var(--border);
-    background:var(--panel); padding:10px; overflow-y:auto;
-    display:flex; flex-direction:column; gap:10px; }
-  .lb-section { font-size:11px; letter-spacing:.1em; text-transform:uppercase;
-    color:var(--muted); padding:2px 0; }
+    background:var(--panel); padding:12px; overflow-y:auto;
+    display:flex; flex-direction:column; gap:12px; }
+  .lb-section { font-size:13px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--muted); padding:2px 0; font-weight:600; }
   .master-slider { background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); padding:9px 11px; }
-  .master-slider .head { display:flex; align-items:center;
-    margin-bottom:7px; gap:8px; }
-  .master-slider .label { font-size:13px; color:var(--muted); }
-  .master-slider .spacer { flex:1; }
-  .master-slider .val { font-size:14px; color:var(--amber); font-weight:600;
-    font-variant-numeric:tabular-nums; }
-  .master-slider .lock-btn { background:transparent; border:1px solid transparent;
-    color:var(--muted); cursor:pointer; padding:2px 5px;
-    border-radius:4px; font-size:15px; opacity:.4; }
-  .master-slider .lock-btn:hover { background:rgba(255,255,255,.06); opacity:.8; }
-  .master-slider .lock-btn.on { opacity:1; border-color:var(--accent);
-    filter:drop-shadow(0 0 4px var(--accent)); }
-  .master-slider input[type="range"] { width:100%; accent-color:var(--amber);
-    height:5px; cursor:pointer; }
+    border-radius:var(--radius); padding:10px 12px; }
+  .master-slider .head { display:flex; align-items:center; gap:8px;
+    margin-bottom:8px; }
+  .master-slider .label { font-size:15px; color:var(--muted); font-weight:500; }
+  .master-slider .head .spacer { flex:1; }
+  .master-delta { font-size:13px; font-weight:600; color:var(--muted);
+    font-variant-numeric:tabular-nums; min-width:34px; }
+  .master-delta.up { color:var(--amber); }
+  .master-delta.down { color:var(--accent); }
 
-  .trio-toggle { display:flex; align-items:center; gap:8px; padding:8px 11px;
+  .slider-row { display:flex; align-items:center; gap:8px; width:100%; }
+  .slider-row input[type="range"] { flex:1; accent-color:var(--amber);
+    height:6px; cursor:pointer; margin:0; }
+  .slider-row input[type="range"]:disabled { opacity:.45; cursor:not-allowed; }
+
+  .lock-btn { background:transparent; border:1px solid transparent;
+    color:var(--muted); cursor:pointer; padding:2px 6px;
+    border-radius:4px; font-size:17px; opacity:.4; line-height:1;
+    transition:all .15s ease; }
+  .lock-btn:hover { background:rgba(255,255,255,.08); opacity:.85; }
+  .lock-btn.on { opacity:1; border-color:var(--accent);
+    filter:drop-shadow(0 0 4px var(--accent)); color:#fff; }
+
+  .trio-toggle { display:flex; align-items:center; gap:8px; padding:10px 12px;
     background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); cursor:pointer; font-size:14px; }
+    border-radius:var(--radius); cursor:pointer; font-size:15px; user-select:none; }
   .trio-toggle:hover { border-color:var(--green); }
   .trio-toggle.on { border-color:var(--green); color:var(--green); }
-  .trio-toggle .sw { width:32px; height:18px; border-radius:10px;
-    background:var(--border); position:relative; transition:background .15s; }
+  .trio-toggle .sw { width:36px; height:20px; border-radius:12px;
+    background:var(--border); position:relative; transition:background .15s; flex-shrink:0; }
   .trio-toggle.on .sw { background:var(--green); }
   .trio-toggle .sw::after { content:''; position:absolute; top:2px; left:2px;
-    width:14px; height:14px; border-radius:50%; background:#fff;
+    width:16px; height:16px; border-radius:50%; background:#fff;
     transition:transform .15s; }
-  .trio-toggle.on .sw::after { transform:translateX(14px); }
+  .trio-toggle.on .sw::after { transform:translateX(16px); }
 
-  .llm-row { padding:9px 11px; border:1px solid var(--border); background:var(--panel-2);
-    border-radius:6px; display:flex; flex-direction:column; gap:6px;
-    cursor:pointer; transition:border-color .12s; }
+  .llm-list-container { display:flex; flex-direction:column; gap:10px; }
+
+  .llm-row { padding:10px 12px; border:1px solid var(--border); background:var(--panel-2);
+    border-radius:8px; display:flex; flex-direction:column; gap:8px;
+    cursor:pointer; transition:border-color .15s, background .15s, box-shadow .15s;
+    user-select:none; position:relative; }
   .llm-row:hover { border-color:var(--accent); }
   .llm-row.off { opacity:.45; }
-  .llm-row .llm-head { display:flex; align-items:center; gap:9px; font-size:15px; }
-  .llm-row .llm-head input[type="checkbox"] { accent-color:var(--accent);
-    margin:0; width:22px; height:22px; cursor:pointer; pointer-events:none; }
-  .llm-row .llm-emoji { font-size:18px; }
-  .llm-row .llm-name { flex:1; font-weight:600; }
-  .llm-row .llm-tok { font-size:14px; color:var(--amber);
-    font-variant-numeric:tabular-nums; min-width:40px; text-align:right; }
-  .llm-row .llm-tok.unl { color:var(--green); }
-  .llm-row .llm-tog { background:transparent; border:none; color:var(--muted);
-    padding:2px 4px; font-size:15px; cursor:pointer; border-radius:3px;
-    opacity:.35; }
-  .llm-row .llm-tog.on { opacity:1; }
-  .llm-row .llm-tog:hover { background:rgba(255,255,255,.06); }
-  .llm-row input[type="range"] { width:100%; accent-color:var(--amber);
-    height:4px; cursor:pointer; margin:0; }
-  .llm-row .prefix { font-size:12px; color:var(--muted); font-style:italic;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-    padding-top:4px; border-top:1px dashed var(--border); }
+  .llm-row.static-row { gap:0; }
 
-  .center { grid-area: center; overflow-y:auto; padding:18px 24px; }
-  .wrap { max-width:900px; margin:0 auto; }
-  .turn { margin-bottom:22px; border-left:2px solid transparent;
-    padding-left:12px; }
+  /* Visual heat: cool blue -> warm orange -> glowing gold.
+     --heat-rgb / --heat-a / --heat-border-a / --heat-glow are set per row
+     from the model's current slider value in applyHeat(). */
+  .llm-row.heat-row {
+    border-color: rgba(var(--heat-rgb, 74, 158, 255), var(--heat-border-a, .3));
+    background: linear-gradient(100deg,
+      rgba(var(--heat-rgb, 74, 158, 255), var(--heat-a, .04)) 0%,
+      var(--panel-2) 78%);
+    box-shadow:
+      0 0 calc(var(--heat-glow, 0) * 1px) rgba(var(--heat-rgb, 74, 158, 255), .45),
+      inset 0 0 calc(var(--heat-glow, 0) * .6px) rgba(var(--heat-rgb, 74, 158, 255), .18);
+  }
+  .llm-row.heat-row:hover {
+    border-color: rgba(var(--heat-rgb, 74, 158, 255), 1);
+  }
+
+  /* Drag feedback is declared after the heat rules so it wins the cascade:
+     .llm-row.heat-row would otherwise override the drag border/glow. */
+  .llm-row.dragging { opacity:.35; border:1px dashed var(--accent); }
+  .llm-row.drag-over { border-color:var(--accent);
+    box-shadow:0 -2px 0 0 var(--accent), 0 0 0 1px var(--accent) inset; }
+
+  .llm-head { display:flex; align-items:center; gap:8px; font-size:17px; }
+  .grab-handle { cursor:grab; color:var(--muted); font-size:16px; user-select:none;
+    padding:0 4px 0 0; display:inline-flex; align-items:center; line-height:1; opacity:.6; }
+  .grab-handle:hover { opacity:1; color:var(--text); }
+  .grab-handle:active { cursor:grabbing; }
+
+  .llm-head input[type="checkbox"] { accent-color:var(--accent);
+    margin:0; width:22px; height:22px; cursor:pointer; flex-shrink:0; }
+  .llm-emoji { font-size:19px; }
+  .llm-name { flex:1; font-weight:600; font-size:16px; }
+
+  /* Prefixes Row */
+  .prefix-row { display:flex; align-items:center; gap:6px; padding-top:4px;
+    border-top:1px dashed var(--border); }
+  .prefix-label { font-size:12px; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.05em; font-weight:500; }
+  .prefix-select { flex:1; background:var(--bg); border:1px solid var(--border);
+    border-radius:4px; color:var(--text); font-size:13px; padding:3px 6px;
+    outline:none; cursor:pointer; font-family:inherit; }
+  .prefix-select:focus { border-color:var(--accent); }
+  .prefix-edit-btn { background:transparent; border:1px solid var(--border);
+    border-radius:4px; color:var(--text); cursor:pointer; padding:2px 6px;
+    font-size:13px; line-height:1.2; font-family:inherit; }
+  .prefix-edit-btn:hover { border-color:var(--accent); background:rgba(255,255,255,.06); }
+  .prefix-preview { font-size:12px; color:var(--muted); font-style:italic;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-left:2px; }
+
+  /* ---- Center ---- */
+  .center { grid-area: center; overflow-y:auto; padding:20px 28px; }
+  .wrap { max-width:950px; margin:0 auto; }
+  .turn { margin-bottom:24px; border-left:2px solid transparent; padding-left:14px; }
   .turn.in-ctx { border-left-color:var(--accent); }
 
   .turn-head { display:flex; align-items:center; justify-content:center;
-    gap:10px; margin-bottom:10px; font-size:13px; color:var(--muted);
+    gap:10px; margin-bottom:12px; font-size:15px; color:var(--muted);
     letter-spacing:.06em; text-transform:uppercase; cursor:pointer;
-    user-select:none; padding:5px 0; border-top:1px solid var(--border);
+    user-select:none; padding:6px 0; border-top:1px solid var(--border);
     border-bottom:1px solid var(--border); }
   .turn-head:hover { color:var(--text); }
   .turn-head .tnum { color:var(--accent); font-weight:600; }
   .turn-head .log-btn { background:transparent; border:none; color:var(--muted);
-    cursor:pointer; padding:2px 6px; border-radius:4px; font-size:14px; }
+    cursor:pointer; padding:2px 6px; border-radius:4px; font-size:16px; }
 
-  .prompt-card { padding:11px 13px; border-radius:var(--radius);
-    background:#141821; border:1px solid var(--border); font-size:16px;
-    margin-bottom:10px; white-space:pre-wrap; word-wrap:break-word; }
-  .prompt-card .who { font-size:11px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .prompt-card { padding:12px 14px; border-radius:var(--radius);
+    background:#141821; border:1px solid var(--border); font-size:18px;
+    margin-bottom:12px; white-space:pre-wrap; word-wrap:break-word; }
+  .prompt-card .who { font-size:13px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
 
   .hybrid-card { border-radius:var(--radius); background:#161e2e;
-    border:1px solid #2a3d5c; overflow:hidden; margin-bottom:6px; }
-  .hybrid-label { font-size:11px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--accent); padding:7px 12px 0 12px; }
-  .hybrid-body { padding:5px 12px 10px 12px; font-size:16px;
+    border:1px solid #2a3d5c; overflow:hidden; margin-bottom:8px; }
+  .hybrid-label { font-size:13px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--accent); padding:8px 14px 0 14px; }
+  .hybrid-body { padding:6px 14px 12px 14px; font-size:18px;
     white-space:pre-wrap; word-wrap:break-word; }
 
-  .score-bar { padding:8px 12px; font-size:14px; cursor:pointer;
+  .score-bar { padding:10px 14px; font-size:16px; cursor:pointer;
     background:rgba(63,185,80,.09); color:var(--green);
     border-top:1px solid var(--border);
     display:flex; gap:8px; align-items:flex-start; }
   .score-bar.mid { background:rgba(240,180,41,.09); color:var(--amber); }
   .score-bar.low { background:rgba(248,81,73,.09); color:var(--red); }
   .score-bar .pct { font-weight:700; white-space:nowrap;
-    font-variant-numeric:tabular-nums; min-width:56px; }
+    font-variant-numeric:tabular-nums; min-width:60px; }
   .score-bar .reason { flex:1; color:var(--muted); font-weight:400;
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .score-bar.open .reason { white-space:normal; }
 
-  .source-bar { display:flex; align-items:center; gap:6px; padding:7px 10px;
+  .source-bar { display:flex; align-items:center; gap:8px; padding:8px 12px;
     border-top:1px solid var(--border); background:rgba(0,0,0,.15);
-    cursor:pointer; user-select:none; }
+    cursor:pointer; user-select:none; flex-wrap:wrap; }
   .source-bar:hover { background:rgba(255,255,255,.03); }
   .src-emoji { background:var(--panel); border:1px solid var(--border);
-    color:var(--text); cursor:pointer; padding:4px 9px; font-size:15px;
+    color:var(--text); cursor:pointer; padding:5px 10px; font-size:17px;
     border-radius:6px; font-family:inherit; }
   .src-emoji:hover { border-color:var(--accent); }
   .src-emoji.on { border-color:var(--accent); background:#1a2130;
@@ -168,62 +212,63 @@
   .src-emoji.omitted { opacity:.45; }
   .source-bar .spacer { flex:1; }
   .source-bar .bar-act { background:transparent; border:1px solid var(--border);
-    color:var(--muted); cursor:pointer; padding:4px 9px; font-size:13px;
+    color:var(--muted); cursor:pointer; padding:5px 10px; font-size:15px;
     border-radius:5px; font-family:inherit; }
   .source-bar .bar-act:hover { color:var(--text); border-color:var(--accent); }
 
   .src-reply { display:none; border-top:1px solid var(--border);
-    background:var(--panel); padding:10px 12px; font-size:16px;
+    background:var(--panel); padding:12px 14px; font-size:18px;
     white-space:pre-wrap; word-wrap:break-word; }
   .src-reply.open { display:block; }
-  .src-reply .src-head { font-size:11px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--muted); margin-bottom:5px;
+  .src-reply .src-head { font-size:13px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--muted); margin-bottom:6px;
     display:flex; gap:8px; align-items:center; }
-  .src-reply .src-head .time { color:var(--muted); font-size:12px;
+  .src-reply .src-head .time { color:var(--muted); font-size:14px;
     text-transform:none; letter-spacing:0; }
   .src-reply .src-head .pct { margin-left:auto; color:var(--green);
     font-weight:600; font-variant-numeric:tabular-nums; }
   .src-reply .src-head .pct.mid { color:var(--amber); }
   .src-reply .src-head .pct.low { color:var(--red); }
-  .src-reply .src-reason { font-size:12px; color:var(--muted);
-    margin-top:7px; padding-top:6px; border-top:1px dashed var(--border); }
+  .src-reply .src-reason { font-size:14px; color:var(--muted);
+    margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); }
 
+  /* ---- Bottom ---- */
   .bottom { grid-area: bottom; border-top:1px solid var(--border);
-    background:var(--panel); padding:10px 14px;
-    display:flex; flex-direction:column; gap:7px; }
-  .bottom-inner { max-width:900px; margin:0 auto; width:100%;
-    display:flex; flex-direction:column; gap:7px; }
+    background:var(--panel); padding:12px 16px;
+    display:flex; flex-direction:column; gap:8px; }
+  .bottom-inner { max-width:950px; margin:0 auto; width:100%;
+    display:flex; flex-direction:column; gap:8px; }
 
   .history { background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); padding:9px 11px;
-    display:flex; flex-direction:column; gap:7px; }
+    border-radius:var(--radius); padding:10px 12px;
+    display:flex; flex-direction:column; gap:8px; }
   .hs-head { display:flex; align-items:center; gap:8px;
-    font-size:12px; color:var(--muted); letter-spacing:.08em;
+    font-size:14px; color:var(--muted); letter-spacing:.08em;
     text-transform:uppercase; }
   .hs-head .spacer { flex:1; }
   .hs-head .meta { font-variant-numeric:tabular-nums; color:var(--accent);
-    letter-spacing:0; text-transform:none; font-size:13px; }
+    letter-spacing:0; text-transform:none; font-size:15px; }
   .hs-row { display:flex; align-items:center; gap:10px; }
-  .hs-preview { flex:1; min-width:0; font-size:14px; color:var(--muted);
+  .hs-preview { flex:1; min-width:0; font-size:16px; color:var(--muted);
     white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .hs-preview strong { color:var(--text); font-weight:600; }
-  .hs-track { flex:0 0 240px; }
+  .hs-track { flex:0 0 260px; }
   .hs-track input[type="range"] { width:100%; accent-color:var(--amber);
-    height:5px; cursor:pointer; }
-  .hs-stats { display:flex; gap:14px; font-size:13px; color:var(--muted);
+    height:6px; cursor:pointer; }
+  .hs-stats { display:flex; gap:16px; font-size:15px; color:var(--muted);
     font-variant-numeric:tabular-nums; }
   .hs-stats strong { color:var(--text); font-weight:600; }
 
-  #masterText { width:100%; min-height:52px; max-height:140px; resize:vertical;
+  #masterText { width:100%; min-height:60px; max-height:160px; resize:vertical;
     background:var(--bg); color:var(--text); border:1px solid var(--border);
-    border-radius:var(--radius); padding:9px 11px; font:inherit;
-    font-size:16px; outline:none; }
+    border-radius:var(--radius); padding:10px 12px; font:inherit;
+    font-size:18px; outline:none; }
   #masterText:focus { border-color:var(--accent); }
 
-  .toolbar { display:flex; align-items:center; gap:4px; flex-wrap:wrap; }
+  .toolbar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
   button { font:inherit; cursor:pointer; border-radius:6px;
     border:1px solid var(--border); background:var(--panel-2); color:var(--text);
-    padding:6px 10px; font-size:16px; line-height:1; }
+    padding:8px 12px; font-size:18px; line-height:1; display:flex; align-items:center; gap:6px; }
   button:hover { border-color:var(--accent); }
   button.primary { background:var(--accent-2); border-color:var(--accent-2); color:#fff; }
   button.toggle { opacity:.45; }
@@ -231,128 +276,131 @@
     box-shadow:0 0 0 1px var(--accent) inset; }
   button.free.on { border-color:var(--green); color:var(--green);
     box-shadow:0 0 0 1px var(--green) inset; }
+  .btn-label { font-size:14px; font-weight:500; }
 
-  .statusbar { display:flex; gap:12px; padding:6px 9px; font-size:13px;
+  .engine-picker { display:flex; align-items:center; gap:6px;
+    background:var(--panel-2); border:1px solid var(--border);
+    border-radius:6px; padding:5px 8px; }
+  .engine-picker:focus-within { border-color:var(--accent); }
+  .engine-picker .engine-label { color:var(--muted); font-size:13px;
+    text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
+  .engine-picker select { background:var(--bg); color:var(--text);
+    border:1px solid var(--border); border-radius:4px; padding:4px 6px;
+    font:inherit; font-size:14px; cursor:pointer; outline:none; }
+  .engine-picker select:focus { border-color:var(--accent); }
+
+  .add-custom-btn { width:100%; justify-content:center;
+    border-style:dashed; color:var(--accent); background:transparent;
+    font-size:15px; padding:9px 10px; }
+  .add-custom-btn:hover { background:rgba(110,168,254,.08); }
+  .model-badge { font-size:10px; font-weight:700; letter-spacing:.06em;
+    color:var(--purple); border:1px solid var(--purple); border-radius:4px;
+    padding:1px 4px; line-height:1.2; text-transform:uppercase; }
+
+  .statusbar { display:flex; gap:12px; padding:8px 10px; font-size:15px;
     background:#0b0d11; border:1px solid var(--border); border-radius:6px;
-    font-variant-numeric:tabular-nums; min-height:28px; align-items:center; }
+    font-variant-numeric:tabular-nums; min-height:32px; align-items:center; }
   .sb-prompt { color:var(--accent); font-weight:600; white-space:nowrap; }
   .sb-timer { color:var(--amber); white-space:nowrap; font-weight:600; }
   .sb-timer.done { color:var(--green); }
   .sb-status { color:var(--muted); white-space:nowrap; }
-  .sb-progress { flex:1; height:3px; background:var(--border); border-radius:2px;
+  .sb-progress { flex:1; height:4px; background:var(--border); border-radius:2px;
     overflow:hidden; min-width:60px; position:relative; }
   .sb-progress .fill { position:absolute; inset:0 auto 0 0;
     background:linear-gradient(90deg, var(--amber), var(--accent));
     transition:width .5s linear; }
 
-  ::-webkit-scrollbar { width:9px; height:9px; }
+  ::-webkit-scrollbar { width:10px; height:10px; }
   ::-webkit-scrollbar-thumb { background:#2a2f3a; border-radius:10px; }
-
-  /* DEMO SPECIFIC STYLES */
-  .tour-overlay {
-    position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 1000;
-    display: flex; align-items: center; justify-content: center;
-    backdrop-filter: blur(2px);
-  }
-  .tour-box {
-    background: var(--panel-2); border: 2px solid var(--accent);
-    border-radius: 12px; padding: 24px; max-width: 400px; text-align: center;
-    box-shadow: 0 20px 50px rgba(0,0,0,0.8);
-  }
-  .tour-box h2 { color: var(--accent); margin-top: 0; }
-  .tour-box p { color: var(--text); margin-bottom: 20px; line-height: 1.6; }
-  .tour-btn {
-    background: var(--accent); color: #fff; border: none; padding: 10px 20px;
-    border-radius: 6px; font-weight: bold; cursor: pointer; font-size: 16px;
-  }
 </style>
 </head>
 <body>
 
-<!-- DEMO TOUR OVERLAY -->
-<div class="tour-overlay" id="tourOverlay">
-  <div class="tour-box">
-    <h2 id="tourTitle">Welcome to LLM Explorer</h2>
-    <p id="tourText">This is a live demo of a local-first, multi-LLM orchestration cockpit. Let's walk through how it works.</p>
-    <button class="tour-btn" id="tourNextBtn">Next</button>
-  </div>
-</div>
-
 <div class="app">
   <div class="topbar">
     <div class="tabs" id="tabs"></div>
+    <button id="loginBtn" onclick="window.api?.startLoginMode?.()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 15px; cursor: pointer;">🔐 Login Mode</button>
+    <button id="newChatBtn" onclick="clearChat()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 15px; cursor: pointer;">🗑️ New Chat</button>
+    <button class="legend-pill" id="legendPill">📖 Legend ▾</button>
+    <button class="branch-pill">🌿 Branch ▾</button>
     
-    <button style="padding: 6px 10px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🔐 Login Mode (Disabled in Demo)</button>
-    <button style="padding: 6px 10px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 13px; opacity: 0.5; cursor: not-allowed;">🗑️ New Chat (Disabled in Demo)</button>
-
-    <button class="legend-pill" id="legendPill">📖 legend ▾</button>
-    <button class="branch-pill">🌿1 ▾</button>
     <div class="legend-drop" id="legendDrop">
       <div class="ld-head"><span>📖 Legend</span><span class="spacer"></span>
-        <span id="ctxPill" style="color:var(--muted);text-transform:none;letter-spacing:0;font-size:13px">idle</span>
+        <span id="ctxPill" style="color:var(--muted);text-transform:none;letter-spacing:0;font-size:15px">idle</span>
       </div>
       <div class="ctx-switch" id="ctxSwitch">
-        <button data-ctx="idle" class="active">idle</button>
-        <button data-ctx="reply">reply</button>
-        <button data-ctx="summary">summary</button>
+        <button data-ctx="idle" class="active">UI Overview</button>
+        <button data-ctx="reply">Reply Tools</button>
+        <button data-ctx="summary">Free Bench</button>
       </div>
       <div class="legend-list" id="legendBody"></div>
     </div>
   </div>
 
-  <div class="leftbar" id="tourLeftbar">
-    <div class="lb-section">Token budget</div>
+  <div class="leftbar">
+    <div class="lb-section">Detail & Heat</div>
     <div class="master-slider">
       <div class="head">
-        <span class="label">Master</span>
-        <button class="lock-btn" id="masterLock" title="Lock — all sliders move together">🔒</button>
+        <span class="label">Master Slider</span>
+        <span class="master-delta" id="masterDelta">±0</span>
         <span class="spacer"></span>
-        <span class="val" id="masterVal">∞</span>
+        <button class="lock-btn" id="masterLock" title="Master Lock OFF: individual locks respected"
+          aria-label="Master lock" aria-pressed="false">🔓</button>
       </div>
-      <input type="range" id="masterSlider" min="100" max="1000" step="50" value="1000">
+      <div class="slider-row">
+        <input type="range" id="masterSlider" min="-100" max="100" step="1" value="0"
+          aria-label="Master relative adjustment">
+      </div>
     </div>
     <div class="trio-toggle" id="trioToggle">
       <div class="sw"></div>
-      <span>∞ for 🌊4 · 🔭8 · 💠6</span>
+      <span>Max Heat for DeepSeek, Perplexity, Meta</span>
     </div>
     <div class="lb-section">Models</div>
-    <div id="llmList"></div>
+    <div id="llmList" class="llm-list-container"></div>
   </div>
 
   <div class="center">
     <div class="wrap" id="convWrap"></div>
   </div>
 
-  <div class="bottom" id="tourBottom">
+  <div class="bottom">
     <div class="bottom-inner">
       <div class="history">
         <div class="hs-head">
-          <span>📜 History</span><span class="spacer"></span>
+          <span>📜 History Context</span><span class="spacer"></span>
           <span class="meta" id="hsMeta">0 of 0 turns included</span>
         </div>
         <div class="hs-row">
           <div class="hs-preview" id="hsPreview"></div>
           <div class="hs-track">
-            <input type="range" id="hsRange" min="0" max="2" value="1">
+            <input type="range" id="hsRange" min="0" max="2" value="0">
           </div>
         </div>
         <div class="hs-stats">
-          <span>Depth: <strong id="hsDepth">0 turn</strong></span>
-          <span>Context: <strong id="hsTok">0 tok</strong></span>
-          <span>Next send: <strong id="hsNext">~0.0s</strong></span>
+          <span>Depth: <strong id="hsDepth">0 turns</strong></span>
+          <span>Est. Context: <strong id="hsTok">0 tok</strong></span>
+          <span>Est. Time: <strong id="hsNext">~0.0s</strong></span>
         </div>
       </div>
 
-      <textarea id="masterText" placeholder="Follow the tour steps..."></textarea>
+      <textarea id="masterText" placeholder="Type a prompt here and hit Send..."></textarea>
 
       <div class="toolbar">
-        <button class="primary" id="sendBtn">⚡</button>
-        <button>🔄</button>
-        <button>Sync</button>
-        <button class="toggle on">✨</button>
-        <button>🪟</button>
-        <button class="toggle free" id="freeBtn">🆓</button>
-        <button>⚙</button>
+        <button class="primary" id="sendBtn">⚡ <span class="btn-label">Send</span></button>
+        <label class="engine-picker" title="Synthesis engine">
+          <span class="engine-label">Engine</span>
+          <select id="engineToggle" aria-label="Synthesis engine">
+            <option value="Local GPU" selected>Local GPU</option>
+            <option value="Cloud">Cloud API (DeepSeek)</option>
+          </select>
+        </label>
+        <button id="retryBtn">🔄 <span class="btn-label">Retry</span></button>
+        <button id="syncBtn">Sync <span class="btn-label">View</span></button>
+        <button class="toggle on" id="prefixToggleBtn">✨ <span class="btn-label">Prefix</span></button>
+        <button id="hybridBtn">🪟 <span class="btn-label">Hybrid</span></button>
+        <button class="toggle free" id="freeBtn">🆓 <span class="btn-label">Free APIs</span></button>
+        <button id="settingsBtn">⚙ <span class="btn-label">Settings</span></button>
       </div>
 
       <div class="statusbar">
@@ -368,195 +416,419 @@
 </div>
 
 <script>
-  // --- MOCK DATA FOR ALL 10 SERVICES ---
-  const MOCK_RESPONSES = {
-    "what does this tool do?": {
-      long: {
-        brave: "This tool is a local-first, multi-LLM orchestration cockpit. It bypasses paid API tokens by using Playwright to physically scrape answers from web interfaces (like Brave Search, Google AI Mode, ChatGPT, etc.). It then passes those raw text blocks to a local Qwen3-8B model running on your own GPU via Intel OpenVINO. The local model acts as a 'Synthesizer'—merging the consensus, flagging contradictions, and generating a Fidelity Log so you know exactly what was kept and what was dropped.",
-        google: "At its core, this application functions as a decentralized AI aggregator. Instead of relying on costly APIs, it utilizes Playwright automation to query your existing web subscriptions. You select the models you want, hit send, and the tool extracts their responses. Subsequently, a local OpenVINO-powered LLM (Qwen3-8B) synthesizes the data based on a strict Fidelity Clause, eliminating hallucinations, removing fluff, and presenting a unified, highly accurate hybrid answer.",
-        chatgpt: "This application acts as a unified interface for multiple AI models. It uses Playwright to automate browser scraping, gathering responses from various web UIs without needing API keys. A local Qwen3-8B model running on Intel hardware then synthesizes these responses using a 'Fidelity Clause' to merge information accurately.",
-        claude: "This tool is an automated, multi-model synthesis engine. It bypasses API costs by using Playwright to extract text directly from web chat interfaces. It then routes the collected data to a local OpenVINO LLM, which merges the outputs into a single hybrid response, complete with a Fidelity Log detailing what was kept, dropped, or disputed.",
-        gemini: "This application serves as an AI aggregator and synthesizer. Users can select from up to ten different web-based language models. The tool autonomously extracts responses from these sites and feeds them into a local Qwen3-8B pipeline. The final output is a synthesized hybrid answer designed to maximize factual consensus while identifying conflicting data points.",
-        deepseek: "This is a Node.js/Electron application utilizing Playwright for DOM-based text extraction from LLM web interfaces. The extracted strings are piped via IPC to a Python backend running OpenVINO. Here, a quantized Qwen3-8B model processes the inputs using a custom prompt architecture (Fidelity Clause) to perform semantic merging, returning a JSON-structured hybrid response.",
-        grok: "Think of this as a boss-level AI turntable. Instead of paying for API tokens, it secretly opens tabs to all your favorite chatbots, copies their homework, and feeds it to a local brain on your GPU. That local model then scrubs out the fluff, stitches the good parts together, and gives you one bulletproof answer without the corporate censorship.",
-        meta: "This tool simplifies how you interact with artificial intelligence by bringing multiple models into one space. It gathers answers from different platforms and uses a local Qwen model to blend them. It's designed for privacy and efficiency, running the final synthesis step entirely on your own hardware so your data stays with you.",
-        copilot: "This application is a professional-grade AI orchestrator. It streamlines research by querying multiple language models simultaneously via browser automation. The collected responses are then processed by a local OpenVINO engine, which applies a strict Fidelity Clause to merge the data into a clean, unified report with a detailed audit log.",
-        perplexity: "This tool functions as a multi-LLM research aggregator. By leveraging Playwright, it extracts current data from various AI search engines and chat interfaces. It then utilizes a local Qwen3-8B model to synthesize the extracted text, cross-referencing claims and producing a final answer with a transparent Fidelity Log to ensure source integrity."
-      },
-      short: {
-        brave: "This is a browser tool that scrapes web AIs and merges them locally.",
-        google: "It is an AI merger that scrapes search engines and synthesizes them.",
-        chatgpt: "It's a custom desktop app that scrapes multiple AIs and uses a local model to merge their answers.",
-        claude: "It's a multi-model text synthesizer that scrapes web chats and merges them using a local GPU.",
-        gemini: "It aggregates AI responses from the web and synthesizes them locally.",
-        deepseek: "It's an Electron/Playwright scraper hooked to a local OpenVINO Python pipeline for text synthesis.",
-        grok: "It's a scraper that steals answers from 10 AIs and makes your local GPU merge them.",
-        meta: "It's a privacy-focused tool that blends answers from multiple AIs using your local hardware.",
-        copilot: "It's an enterprise-ready AI tool that unifies web scrapers and local synthesis.",
-        perplexity: "It's a multi-LLM research tool that aggregates web data and synthesizes it locally."
-      },
-      hybrid: {
-        brave: "This tool is a local-first, multi-LLM orchestration cockpit. By bypassing paid APIs, it uses Playwright to scrape answers from web interfaces and passes them to a local Qwen3-8B model running on your GPU via Intel OpenVINO. It merges consensus, flags contradictions, and generates a Fidelity Log.",
-        google: "This application functions as a decentralized AI aggregator using Playwright automation to query web subscriptions. The extracted responses are synthesized by a local OpenVINO-powered LLM (Qwen3-8B), which applies a strict Fidelity Clause to eliminate fluff, remove hallucinations, and present a highly accurate hybrid answer.",
-        chatgpt: "This tool unifies multiple AI models through Playwright browser automation, gathering responses from web UIs without API keys. A local Qwen3-8B model on Intel hardware then synthesizes these responses using a Fidelity Clause to accurately merge information into one hybrid answer.",
-        claude: "This is an automated, multi-model synthesis engine. It uses Playwright to extract text from web chat interfaces, bypassing API costs. The data is routed to a local OpenVINO LLM, which merges the outputs into a single hybrid response accompanied by a Fidelity Log detailing what was kept, dropped, or disputed.",
-        gemini: "This application serves as an AI aggregator. It autonomously extracts responses from up to ten web-based language models and feeds them into a local Qwen3-8B pipeline. The output is a synthesized hybrid answer designed to maximize factual consensus while identifying conflicting data points.",
-        deepseek: "This is a Node.js/Electron application utilizing Playwright for DOM-based extraction from LLM web interfaces. Extracted strings are piped via IPC to a Python/OpenVINO backend, where a quantized Qwen3-8B model performs semantic merging using a custom Fidelity Clause, returning a hybrid response.",
-        grok: "This is a boss-level AI turntable. It opens tabs to your favorite chatbots, copies their answers, and feeds it to a local GPU brain. The local model scrubs the fluff, stitches the good parts together, and gives you one bulletproof answer without API costs.",
-        meta: "This tool brings multiple AI models into one space. It gathers answers from different platforms and uses a local Qwen model to blend them, running the final synthesis step entirely on your own hardware so your data stays private.",
-        copilot: "This is a professional-grade AI orchestrator. It queries multiple language models simultaneously via browser automation, then processes the responses using a local OpenVINO engine. A strict Fidelity Clause merges the data into a clean, unified report with an audit log.",
-        perplexity: "This tool aggregates research by extracting data from AI search engines and chat interfaces. It utilizes a local Qwen3-8B model to synthesize the text, cross-referencing claims and producing a final answer with a transparent Fidelity Log to ensure source integrity."
-      }
-    },
-    "how does the local synthesis work?": {
-      long: {
-        brave: "The synthesis uses the Fidelity Clause in the system prompt. The local Qwen3-8B model is instructed to act as a sorter, not a truth-judge. It groups overlapping points into [CONSENSUS], flags disagreements into [DISPUTED], and drops redundant text. It runs entirely offline on your Intel Arc GPU at about 16.5 tokens per second.",
-        google: "The local synthesis relies on the OpenVINO GenAI pipeline. Once the scrapers finish, the text is piped to a Python backend running Qwen3-8B-int4. The model is prompted to structure the output into two sections: the 'Synthesized Answer' and the 'Fidelity Log'. This ensures you get a clean, hybrid response while retaining a transparent audit trail of what information was discarded.",
-        chatgpt: "Once all web scrapers return their text, the tool triggers a Python script running the Qwen3-8B model on your local GPU. It feeds the model a system prompt that enforces a 'Fidelity Clause'—a strict set of rules for merging text without hallucinating. The model outputs a unified answer and a log of what it kept and dropped.",
-        claude: "The local synthesis is handled by a quantized Qwen3-8B model running on Intel hardware. It receives the scraped responses and applies the Fidelity Clause: preserving distinct facts, collapsing duplicates, and explicitly flagging contradictions. It then generates a two-part output: the final hybrid answer and a structured log detailing the merge.",
-        gemini: "The synthesis engine is a local OpenVINO pipeline. It takes the multiple text outputs, encodes them, and feeds them into a Qwen3-8B model. The model processes the text based on a Fidelity Clause, which dictates how to handle overlapping or conflicting information, ultimately generating a single, comprehensive answer.",
-        deepseek: "Synthesis is performed by a local Python script invoking `ov_genai.LLMPipeline` with the Qwen3-8B-int4-ov model. The scraped texts are concatenated with `---END---` delimiters and passed via stdin. The model is prompted to parse the text, identify consensus/disputes, and output a JSON-formatted hybrid response, bypassing external API latency.",
-        grok: "The local model is basically the referee. It takes all the scraped text, reads your 'Fidelity Clause' instructions, and gets to work. It strips out the fluff, combines the overlapping facts, and writes one perfect answer. Since it runs on your GPU, it's completely private and costs zero dollars.",
-        meta: "The synthesis phase is fully private. Your laptop's GPU runs a local Qwen model that reads the gathered text. Following the Fidelity Clause, it merges the information into a single response, ensuring that all unique perspectives are kept while redundant or conflicting information is logged for your review.",
-        copilot: "Synthesis is executed by a local OpenVINO runtime. The scraped outputs are aggregated and sent to the Qwen3-8B model. The model applies the Fidelity Clause to merge the data, outputting a standardized report containing the synthesized answer and a fidelity log for full transparency.",
-        perplexity: "The synthesis step is handled by a local Qwen3-8B model. It cross-references the multiple inputs according to the Fidelity Clause, extracting the consensus and identifying any disputes. The final output includes a detailed log of the sources, ensuring the hybrid answer is traceable and reliable."
-      },
-      short: {
-        brave: "A local Qwen3-8B model reads the text and merges it based on the Fidelity Clause.",
-        google: "A local OpenVINO pipeline runs Qwen3-8B to synthesize the text offline.",
-        chatgpt: "A local Python script runs Qwen3-8B to merge the text without hallucinating.",
-        claude: "A quantized Qwen3-8B model merges the text and logs contradictions.",
-        gemini: "A local Qwen3-8B model processes the text and outputs a unified answer.",
-        deepseek: "Python invokes the OpenVINO LLMPipeline to semantically merge the inputs.",
-        grok: "Your GPU runs a local model that refs the answers and makes them into one.",
-        meta: "Your laptop's GPU runs a local model to blend the text privately.",
-        copilot: "A local OpenVINO runtime merges the text into a standardized report.",
-        perplexity: "A local Qwen3-8B model cross-references the inputs and synthesizes them."
-      },
-      hybrid: {
-        brave: "The synthesis uses a Fidelity Clause system prompt. The local Qwen3-8B model acts as a sorter, not a truth-judge. It groups points into [CONSENSUS], flags [DISPUTED] claims, and drops redundant text, all offline on your Intel Arc GPU at 16.5 tokens per second.",
-        google: "The synthesis relies on the OpenVINO GenAI pipeline. Scraped text is piped to a Python backend running Qwen3-8B-int4. The model structures the output into a 'Synthesized Answer' and a 'Fidelity Log', providing a clean hybrid response with a transparent audit trail.",
-        chatgpt: "The tool triggers a local Python script running Qwen3-8B on your GPU. It uses a 'Fidelity Clause'—strict rules for merging text without hallucinating. The model generates a unified answer alongside a log of what was kept and dropped.",
-        claude: "A quantized Qwen3-8B model handles synthesis on Intel hardware. It applies the Fidelity Clause: preserving distinct facts, collapsing duplicates, and flagging contradictions. The output includes the hybrid answer and a structured merge log.",
-        gemini: "The local OpenVINO pipeline encodes the multiple text outputs and feeds them to Qwen3-8B. The model processes the text based on a Fidelity Clause to handle overlapping information and generate a single comprehensive answer.",
-        deepseek: "A local Python script invokes `ov_genai.LLMPipeline` with Qwen3-8B-int4-ov. Scraped texts are delimited and passed via stdin. The model identifies consensus/disputes and outputs a JSON-formatted hybrid response, bypassing external latency.",
-        grok: "The local model acts as a referee. It reads your 'Fidelity Clause', strips the fluff, combines overlapping facts, and writes one perfect answer. It's completely private, runs on your GPU, and costs zero dollars.",
-        meta: "Your laptop's GPU runs a local Qwen model to merge the gathered text. Following the Fidelity Clause, it combines the information into one response while logging redundant or conflicting data for your review.",
-        copilot: "A local OpenVINO runtime aggregates the scraped outputs and sends them to Qwen3-8B. The model applies the Fidelity Clause to merge data into a standardized report containing the synthesized answer and a fidelity log.",
-        perplexity: "A local Qwen3-8B model cross-references the inputs according to the Fidelity Clause. It extracts consensus and flags disputes, producing a hybrid answer with a detailed source log for reliability."
-      }
-    }
+  // --- PREFIX PRESETS ---
+  const PREFIX_PRESETS = {
+    'Concise': 'Be concise, direct, and avoid preamble.',
+    'Detailed': 'Provide a detailed, comprehensive response with examples.',
+    'ELI5': "Explain like I'm 5 years old. Use simple language and relatable analogies."
   };
 
+  // --- MODEL CHANNELS CONFIGURATION ---
   const CH = [
-    { id:'brave',      emoji:'🦁0', name:'Brave',      checked:true,  maxTokens:1000, prefixOn:true, style:'Search AI',                     tps:100, ttft:0.5 },
-    { id:'google',     emoji:'🔍9', name:'Google AI',  checked:true,  maxTokens:1000, prefixOn:true, style:'AI Mode',                       tps:100, ttft:0.5 },
-    { id:'chatgpt',    emoji:'🤖1', name:'ChatGPT',    checked:false, maxTokens:1000, prefixOn:true, style:'balanced, conversational',      tps:80,  ttft:0.4 },
-    { id:'claude',     emoji:'🎭2', name:'Claude',     checked:false, maxTokens:1000, prefixOn:true, style:'concise, direct, no preamble',  tps:75,  ttft:0.4 },
-    { id:'gemini',     emoji:'♊3', name:'Gemini',     checked:false, maxTokens:1000, prefixOn:true, style:'structured, comprehensive',     tps:195, ttft:0.5 },
-    { id:'deepseek',   emoji:'🌊4', name:'DeepSeek',   checked:false, maxTokens:1000, prefixOn:true, style:'technical, code-friendly',      tps:110, ttft:0.4 },
-    { id:'grok',       emoji:'🌌5', name:'Grok',       checked:false, maxTokens:1000, prefixOn:true, style:'witty, unfiltered',             tps:90,  ttft:0.5 },
-    { id:'meta',       emoji:'💠6', name:'Meta AI',    checked:false, maxTokens:1000, prefixOn:true, style:'casual, socially aware',        tps:85,  ttft:0.5 },
-    { id:'copilot',    emoji:'🛩️7', name:'Copilot',    checked:false, maxTokens:1000, prefixOn:true, style:'professional',                  tps:70,  ttft:0.6 },
-    { id:'perplexity', emoji:'🔭8', name:'Perplexity', checked:false, maxTokens:1000, prefixOn:true, style:'research-focused with sources', tps:60,  ttft:0.8 }
+    { id:'brave',      emoji:'🦁', name:'Brave',      checked:true,  isStatic:true,  tps:100, ttft:0.5 },
+    { id:'google',     emoji:'🔍', name:'Google AI',  checked:true,  isStatic:true,  tps:100, ttft:0.5 },
+    { id:'chatgpt',    emoji:'🤖', name:'ChatGPT',    checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Concise',  customPrefix:'', prefix:PREFIX_PRESETS['Concise'],  tps:80,  ttft:0.4 },
+    { id:'claude',     emoji:'🎭', name:'Claude',     checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Concise',  customPrefix:'', prefix:PREFIX_PRESETS['Concise'],  tps:75,  ttft:0.4 },
+    { id:'gemini',     emoji:'♊', name:'Gemini',     checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Detailed', customPrefix:'', prefix:PREFIX_PRESETS['Detailed'], tps:195, ttft:0.5 },
+    { id:'deepseek',   emoji:'🌊', name:'DeepSeek',   checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Detailed', customPrefix:'', prefix:PREFIX_PRESETS['Detailed'], tps:110, ttft:0.4 },
+    { id:'grok',       emoji:'🌌', name:'Grok',       checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Concise',  customPrefix:'', prefix:PREFIX_PRESETS['Concise'],  tps:90,  ttft:0.5 },
+    { id:'meta',       emoji:'💠', name:'Meta AI',    checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Concise',  customPrefix:'', prefix:PREFIX_PRESETS['Concise'],  tps:85,  ttft:0.5 },
+    { id:'copilot',    emoji:'🛩️', name:'Copilot',    checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Detailed', customPrefix:'', prefix:PREFIX_PRESETS['Detailed'], tps:70,  ttft:0.6 },
+    { id:'perplexity', emoji:'🔭', name:'Perplexity', checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Detailed', customPrefix:'', prefix:PREFIX_PRESETS['Detailed'], tps:60,  ttft:0.8 }
   ];
   const HYB = '🪟';
 
-  function tierFor(t) {
-    if (t >= 1000) return 'max';
-    if (t <= 150) return 'tiny';
-    if (t <= 250) return 'short';
-    if (t <= 400) return 'para';
-    if (t <= 550) return 'two';
-    if (t <= 700) return 'few';
-    if (t <= 850) return 'multi';
-    return 'long';
+  // Helper: Escape user-entered strings used in innerHTML
+  function esc(value) {
+    return String(value ?? '').replace(/[&<>"']/g, c => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[c]));
   }
-  const TIER_TEXT = {
-    tiny:'One sentence. No elaboration.', short:'2-3 sentences.',
-    para:'One short paragraph.', two:'1-2 paragraphs.',
-    few:'3-4 paragraphs.', multi:'Multi-paragraph with structure.',
-    long:'Comprehensive with headers.',
-    max:'Comprehensive, structured, examples welcome.',
-  };
-  function prefixFor(ch) { return `${ch.style}. ${TIER_TEXT[tierFor(ch.maxTokens)]} `; }
 
-  function parseScore(raw) {
-    const m = raw.match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*10/i);
-    const r = raw.match(/REASON:\s*(.+?)(?:\n|$)/i);
-    return { score: m ? parseFloat(m[1]) : null, reason: r ? r[1].trim() : '' };
+  // Helper: Effective Prefix text
+  function getPrefixText(ch) {
+    if (ch.prefixType === 'Custom') {
+      return ch.customPrefix || 'Custom prefix';
+    }
+    return PREFIX_PRESETS[ch.prefixType] || PREFIX_PRESETS['Concise'];
   }
-  function stripScore(raw) { return raw.replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
 
-  let linked = false;
+  // --- CUSTOM API MODELS ---
+  let customModelSeq = 0;
+  function addCustomModel() {
+    const nameInput = prompt('Custom LLM name:', '');
+    if (nameInput === null) return;
+    const name = nameInput.trim();
+    if (!name) {
+      alert('A name is required.');
+      return;
+    }
 
-  function renderLeft() {
-    const list = document.getElementById('llmList');
-    list.innerHTML = '';
+    const endpointInput = prompt(
+      'Endpoint URL (OpenAI-compatible /chat/completions):',
+      'https://'
+    );
+    if (endpointInput === null) return;
+    const endpoint = endpointInput.trim();
+    try {
+      const url = new URL(endpoint);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
+    } catch {
+      alert('Enter a valid http(s) endpoint URL.');
+      return;
+    }
+
+    const apiKeyInput = prompt('API key (leave blank if not required):', '');
+    if (apiKeyInput === null) return;
+
+    const id = `custom-${Date.now().toString(36)}-${customModelSeq++}`;
+    CH.push({
+      id,
+      emoji: '🧩',
+      name,
+      type: 'custom',
+      endpoint,
+      apiKey: apiKeyInput.trim(),
+      checked: true,
+      isStatic: false,
+      value: 50,
+      baseValue: 50,
+      locked: false,
+      lockedValue: null,
+      prefixType: 'Concise',
+      customPrefix: '',
+      prefix: PREFIX_PRESETS['Concise'],
+      tps: 120,
+      ttft: 0.5
+    });
+
+    renderLeft();
+    updateTimer();
+  }
+
+  // Helper: Blend cool blue -> warm orange -> glowing gold.
+  function heatColor(value) {
+    const v = Math.max(1, Math.min(100, Number(value) || 1));
+    const lerp = (a, b, t) => Math.round(a + (b - a) * t);
+    if (v <= 50) {
+      const t = (v - 1) / 49;
+      return [lerp(74, 255, t), lerp(158, 154, t), lerp(255, 60, t)];
+    }
+    const t = (v - 50) / 50;
+    return [lerp(255, 255, t), lerp(154, 212, t), lerp(60, 94, t)];
+  }
+
+  function applyHeat(row, value) {
+    const v = Math.max(1, Math.min(100, Number(value) || 1));
+    const [r, g, b] = heatColor(v);
+    const t = (v - 1) / 99;
+    row.classList.add('heat-row');
+    row.style.setProperty('--heat-rgb', `${r}, ${g}, ${b}`);
+    row.style.setProperty('--heat-a', (0.04 + 0.20 * t).toFixed(3));
+    row.style.setProperty('--heat-border-a', (0.30 + 0.60 * t).toFixed(3));
+    row.style.setProperty('--heat-glow', (Math.max(0, (t - 0.7) / 0.3) * 18).toFixed(1));
+  }
+
+  // --- STATE FOR LOCKS & MASTER SLIDER ---
+  const masterSlider = document.getElementById('masterSlider');
+  const masterDelta = document.getElementById('masterDelta');
+  const masterLock = document.getElementById('masterLock');
+
+  let masterLocked = false;
+  let draggedIdx = null;
+
+  const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
+
+  function getMasterOffset() {
+    return parseInt(masterSlider.value, 10) || 0;
+  }
+
+  function syncMasterUI() {
+    const offset = getMasterOffset();
+    masterDelta.textContent = offset === 0 ? '±0' : (offset > 0 ? `+${offset}` : String(offset));
+    masterDelta.classList.toggle('up', offset > 0);
+    masterDelta.classList.toggle('down', offset < 0);
+  }
+
+  function applyMasterOffset() {
+    const offset = getMasterOffset();
     CH.forEach(ch => {
-      const row = document.createElement('div');
-      row.className = 'llm-row' + (ch.checked ? '' : ' off');
-      const tokText = ch.maxTokens >= 1000 ? '∞' : ch.maxTokens;
-      row.innerHTML = `
-        <div class="llm-head">
-          <input type="checkbox" ${ch.checked ? 'checked' : ''}>
-          <span class="llm-emoji">${ch.emoji}</span>
-          <span class="llm-name">${ch.name}</span>
-          <span class="llm-tok ${ch.maxTokens >= 1000 ? 'unl' : ''}">${tokText}</span>
-          <button class="llm-tog ${ch.prefixOn ? 'on' : ''}" title="Prepend prefix on send">✨</button>
-        </div>
-        <input type="range" min="100" max="1000" step="50" value="${ch.maxTokens}">
-        <div class="prefix">↳ ${prefixFor(ch)}</div>
-      `;
-      row.onclick = (e) => {
-        if (e.target.closest('input[type="range"]')
-          || e.target.closest('.llm-tog')) return;
-        ch.checked = !ch.checked;
-        renderLeft();
-      };
-      row.querySelector('.llm-tog').onclick = (e) => {
-        e.stopPropagation(); ch.prefixOn = !ch.prefixOn; renderLeft();
-      };
-      const slider = row.querySelector('input[type="range"]');
-      slider.onclick = e => e.stopPropagation();
-      slider.oninput = () => {
-        ch.maxTokens = parseInt(slider.value);
-        if (linked) CH.forEach(c => c.maxTokens = ch.maxTokens);
-        renderLeft(); updateHistory(); updateTimer();
-      };
-      list.appendChild(row);
+      if (ch.isStatic) return;
+      if (masterLocked || !ch.locked) {
+        ch.value = clamp(ch.baseValue + offset, 1, 100);
+      }
     });
   }
 
-  const masterLock = document.getElementById('masterLock');
+  function commitMasterBaseline() {
+    CH.forEach(ch => {
+      if (!ch.isStatic) {
+        ch.baseValue = ch.value;
+        // A committed value is also the new pin for an individually locked model.
+        if (ch.locked) ch.lockedValue = ch.value;
+      }
+    });
+    masterSlider.value = '0';
+    syncMasterUI();
+  }
+
+  function rebaseModel(ch) {
+    if (!ch.isStatic) ch.baseValue = clamp(ch.value - getMasterOffset(), 1, 100);
+  }
+
+  // --- LEFT BAR RENDERING ---
+  function renderLeft() {
+    const list = document.getElementById('llmList');
+    list.innerHTML = '';
+
+    CH.forEach((ch, index) => {
+      const row = document.createElement('div');
+      row.dataset.id = ch.id;
+      row.dataset.index = index;
+      row.setAttribute('draggable', 'true');
+
+      if (ch.isStatic) {
+        // Brave / Google: checkbox + drag handle only.
+        row.className = `llm-row static-row${ch.checked ? '' : ' off'}`;
+        row.innerHTML = `
+          <div class="llm-head">
+            <span class="grab-handle" title="Drag to reorder">⋮⋮</span>
+            <input type="checkbox" ${ch.checked ? 'checked' : ''} aria-label="Enable ${esc(ch.name)}">
+            <span class="llm-emoji">${ch.emoji}</span>
+            <span class="llm-name">${esc(ch.name)}</span>
+          </div>
+        `;
+
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        checkbox.onclick = (e) => e.stopPropagation();
+        checkbox.onchange = () => {
+          ch.checked = checkbox.checked;
+          row.classList.toggle('off', !ch.checked);
+          updateTimer();
+        };
+      } else {
+        // Interactive model row: checkbox + handle + slider + lock + prefix.
+        const isSliderDisabled = !masterLocked && ch.locked;
+        const currentPrefix = getPrefixText(ch);
+
+        row.className = `llm-row${ch.checked ? '' : ' off'}`;
+        applyHeat(row, ch.value);
+
+        row.innerHTML = `
+          <div class="llm-head">
+            <span class="grab-handle" title="Drag to reorder">⋮⋮</span>
+            <input type="checkbox" ${ch.checked ? 'checked' : ''} aria-label="Enable ${esc(ch.name)}">
+            <span class="llm-emoji">${ch.emoji}</span>
+            <span class="llm-name">${esc(ch.name)}</span>
+            ${ch.type === 'custom' ? `<span class="model-badge" title="${esc(ch.endpoint)}">API</span>` : ''}
+            <button class="lock-btn${ch.locked ? ' on' : ''}" title="${ch.locked ? 'Unlock model' : 'Lock model'}" aria-label="${ch.locked ? 'Unlock model' : 'Lock model'}" aria-pressed="${ch.locked}">${ch.locked ? '🔒' : '🔓'}</button>
+          </div>
+          <div class="slider-row">
+            <input type="range" min="1" max="100" step="1" value="${ch.value}" ${isSliderDisabled ? 'disabled' : ''} aria-label="${esc(ch.name)} detail level">
+          </div>
+          <div class="prefix-row">
+            <span class="prefix-label">Prefix</span>
+            <select class="prefix-select" aria-label="${esc(ch.name)} prefix">
+              <option value="Concise" ${ch.prefixType === 'Concise' ? 'selected' : ''}>Concise</option>
+              <option value="Detailed" ${ch.prefixType === 'Detailed' ? 'selected' : ''}>Detailed</option>
+              <option value="ELI5" ${ch.prefixType === 'ELI5' ? 'selected' : ''}>ELI5</option>
+              ${ch.prefixType === 'Custom' ? `<option value="Custom" selected>Custom</option>` : ''}
+            </select>
+            <button class="prefix-edit-btn" title="Edit custom prefix" aria-label="Edit custom prefix">✏️</button>
+          </div>
+          <div class="prefix-preview" title="${esc(currentPrefix)}">↳ ${esc(currentPrefix)}</div>
+        `;
+
+        // Checkbox state
+        const checkbox = row.querySelector('input[type="checkbox"]');
+        checkbox.onclick = (e) => e.stopPropagation();
+        checkbox.onchange = () => {
+          ch.checked = checkbox.checked;
+          row.classList.toggle('off', !ch.checked);
+          updateTimer();
+        };
+
+        // Per-model slider. A manual edit becomes the new baseline.
+        const slider = row.querySelector('input[type="range"]');
+        slider.oninput = () => {
+          ch.value = parseInt(slider.value, 10);
+          commitMasterBaseline();
+          applyHeat(row, ch.value);
+          updateHistory();
+          updateTimer();
+        };
+
+        // Model lock at the far right of the header row
+        const lockBtn = row.querySelector('.lock-btn');
+        lockBtn.onclick = (e) => {
+          e.stopPropagation();
+          if (ch.locked) {
+            ch.locked = false;
+            ch.lockedValue = null;
+          } else {
+            ch.locked = true;
+            ch.lockedValue = ch.value;
+          }
+          rebaseModel(ch);
+          renderLeft();
+          updateTimer();
+        };
+
+        // Prefix preset dropdown
+        const prefixSelect = row.querySelector('.prefix-select');
+        prefixSelect.onchange = (e) => {
+          e.stopPropagation();
+          ch.prefixType = prefixSelect.value;
+          ch.prefix = getPrefixText(ch);
+          renderLeft();
+        };
+
+        // Pencil -> prompt() -> store the custom string back on CH
+        const editBtn = row.querySelector('.prefix-edit-btn');
+        editBtn.onclick = (e) => {
+          e.stopPropagation();
+          const current = ch.customPrefix || getPrefixText(ch);
+          const result = prompt(`Enter custom prefix for ${ch.name}:`, current);
+          if (result !== null && result.trim() !== '') {
+            ch.customPrefix = result.trim();
+            ch.prefixType = 'Custom';
+            ch.prefix = ch.customPrefix;
+            renderLeft();
+          }
+        };
+      }
+
+      // Interactive controls should not trigger row selection or row drag.
+      row.querySelectorAll('input, select, button').forEach(el => {
+        el.setAttribute('draggable', 'false');
+        el.onmousedown = (e) => e.stopPropagation();
+      });
+
+      // Clicking the row (outside a control/handle) toggles its checkbox.
+      row.onclick = (e) => {
+        if (e.target.closest('input, select, button, .grab-handle')) return;
+        ch.checked = !ch.checked;
+        renderLeft();
+        updateTimer();
+      };
+
+      // HTML5 drag-and-drop: dropping on a lower row inserts after it,
+      // dropping on a higher row inserts before it.
+      row.ondragstart = (e) => {
+        if (e.target.closest('input, select, button')) {
+          e.preventDefault();
+          return;
+        }
+        draggedIdx = index;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(index));
+        setTimeout(() => row.classList.add('dragging'), 0);
+      };
+
+      row.ondragover = (e) => {
+        if (draggedIdx === null) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        row.classList.add('drag-over');
+      };
+
+      row.ondragleave = () => {
+        row.classList.remove('drag-over');
+      };
+
+      row.ondrop = (e) => {
+        e.preventDefault();
+        row.classList.remove('drag-over');
+        const from = draggedIdx !== null
+          ? draggedIdx
+          : parseInt(e.dataTransfer.getData('text/plain'), 10);
+        if (!Number.isInteger(from) || from === index) {
+          draggedIdx = null;
+          return;
+        }
+        const [movedItem] = CH.splice(from, 1);
+        CH.splice(index, 0, movedItem);
+        draggedIdx = null;
+        renderLeft();
+      };
+
+      row.ondragend = () => {
+        draggedIdx = null;
+        document.querySelectorAll('.llm-row').forEach(r => {
+          r.classList.remove('dragging', 'drag-over');
+        });
+      };
+
+      list.appendChild(row);
+    });
+
+    const addBtn = document.createElement('button');
+    addBtn.className = 'add-custom-btn';
+    addBtn.textContent = '➕ Add Custom LLM';
+    addBtn.title = 'Add an OpenAI-compatible API endpoint';
+    addBtn.onclick = addCustomModel;
+    list.appendChild(addBtn);
+  }
+
+  // --- MASTER LOCK BUTTON ---
   masterLock.onclick = (e) => {
     e.stopPropagation();
-    linked = !linked;
-    masterLock.classList.toggle('on', linked);
-    masterLock.title = linked ? 'Unlock — individual sliders move independently' : 'Lock — all sliders move together';
+    masterLocked = !masterLocked;
+    masterLock.classList.toggle('on', masterLocked);
+    masterLock.setAttribute('aria-pressed', String(masterLocked));
+    masterLock.textContent = masterLocked ? '🔒' : '🔓';
+    masterLock.title = masterLocked
+      ? 'Master Lock ON: overrides individual locks'
+      : 'Master Lock OFF: individual locks respected';
+    if (masterLocked) {
+      applyMasterOffset();
+    } else {
+      // Releasing the master lock hands control back to individual locks:
+      // restore each locked model to the value it was pinned at.
+      CH.forEach(ch => {
+        if (!ch.isStatic && ch.locked && ch.lockedValue != null) {
+          ch.value = ch.lockedValue;
+        }
+      });
+    }
+    renderLeft();
+    updateTimer();
   };
 
-  const masterSlider = document.getElementById('masterSlider');
-  const masterVal = document.getElementById('masterVal');
+  // --- MASTER SLIDER: RELATIVE OFFSET, NOT ABSOLUTE VALUE ---
+  // Each model keeps its own baseValue. The master slider is an offset in
+  // the range -100..+100:
+  //   20/50 +10 -> 30/60, then back to 0 -> 20/50 exactly.
+  // Individual values clamp at 1/100, but the master offset can keep going
+  // until every model has reached the cap.
   masterSlider.oninput = () => {
-    const v = parseInt(masterSlider.value);
-    masterVal.textContent = v >= 1000 ? '∞' : v + ' tok';
-    CH.forEach(c => c.maxTokens = v);
-    renderLeft(); updateHistory(); updateTimer();
+    applyMasterOffset();
+    syncMasterUI();
+    renderLeft();
+    updateHistory();
+    updateTimer();
   };
 
+  // --- TRIO TOGGLE (Max heat for DeepSeek, Perplexity, Meta) ---
   const trio = document.getElementById('trioToggle');
   let trioOn = false;
   trio.onclick = () => {
     trioOn = !trioOn;
     trio.classList.toggle('on', trioOn);
-    ['deepseek','perplexity','meta'].forEach(id => {
+    ['deepseek', 'perplexity', 'meta'].forEach(id => {
       const c = CH.find(x => x.id === id);
-      if (c) c.maxTokens = trioOn ? 1000 : 600;
+      if (c && !c.isStatic) {
+        c.value = trioOn ? 100 : 50;
+        c.baseValue = c.value;
+      }
     });
-    renderLeft(); updateHistory(); updateTimer();
+    commitMasterBaseline();
+    renderLeft();
+    updateHistory();
+    updateTimer();
   };
 
+  // --- CONVERSATION & TURNS STATE ---
   let turns = [];
   let activeTab = 'hybrid';
   const openState = {};
@@ -568,12 +840,13 @@
     turns.forEach(t => {
       Object.keys(t.replies || {}).forEach(id => used.add(id));
       if (t.hybrid) {
-        t.hybrid.sources.forEach(id => used.add(id));
+        (t.hybrid.sources || []).forEach(id => used.add(id));
         Object.keys(t.hybrid.omitted || {}).forEach(id => used.add(id));
       }
     });
     return used;
   }
+
   function renderTabs() {
     const tabs = document.getElementById('tabs');
     tabs.innerHTML = '';
@@ -583,11 +856,13 @@
     h.textContent = HYB;
     h.onclick = () => { activeTab = 'hybrid'; renderAll(); };
     tabs.appendChild(h);
+
     CH.forEach(ch => {
       if (!used.has(ch.id)) return;
       const b = document.createElement('button');
       b.className = 'tab' + (ch.id === activeTab ? ' active' : '');
-      b.textContent = ch.emoji; b.title = ch.name;
+      b.textContent = ch.emoji;
+      b.title = ch.name;
       b.onclick = () => { activeTab = ch.id; renderAll(); };
       tabs.appendChild(b);
     });
@@ -595,10 +870,18 @@
 
   function scoreClass(pct) { return pct >= 80 ? '' : pct >= 50 ? 'mid' : 'low'; }
 
+  function parseScore(raw) {
+    const m = (raw || '').match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*10/i);
+    const r = (raw || '').match(/REASON:\s*(.+?)(?:\n|$)/i);
+    return { score: m ? parseFloat(m[1]) : null, reason: r ? r[1].trim() : '' };
+  }
+  function stripScore(raw) { return (raw || '').replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
+
   function renderConv() {
     const wrap = document.getElementById('convWrap');
     wrap.innerHTML = '';
     const depth = parseInt(document.getElementById('hsRange').value);
+
     turns.forEach((t, idx) => {
       const inCtx = idx < depth;
       const el = document.createElement('div');
@@ -609,7 +892,7 @@
       head.innerHTML = `<span class="tnum">▶ T${t.n}</span>
         <span>·</span>
         <span>${t.prompt.slice(0, 60)}${t.prompt.length > 60 ? '…' : ''}</span>
-        ${inCtx ? '<span style="color:var(--accent);font-size:11px">· in context</span>' : ''}
+        ${inCtx ? '<span style="color:var(--accent);font-size:13px">· in context</span>' : ''}
         <button class="log-btn" title="Channel log">📜</button>`;
       el.appendChild(head);
 
@@ -636,17 +919,18 @@
         const sb = document.createElement('div');
         sb.className = 'score-bar ' + scoreClass(t.hybrid.score);
         sb.innerHTML = `<span class="pct">🎯 ${t.hybrid.score}%</span>
-          <span class="reason">${t.hybrid.reason}</span>`;
+          <span class="reason">${t.hybrid.reason || ''}</span>`;
         sb.onclick = (e) => { e.stopPropagation(); sb.classList.toggle('open'); };
         card.appendChild(sb);
 
         const bar = document.createElement('div');
         bar.className = 'source-bar';
 
-        const emojiButtons = t.order.map(id => {
+        const emojiButtons = (t.order || []).map(id => {
           const ch = CH.find(x => x.id === id);
+          if (!ch) return '';
           const omitted = t.hybrid.omitted && t.hybrid.omitted[id];
-          const isSrc = t.hybrid.sources.includes(id);
+          const isSrc = (t.hybrid.sources || []).includes(id);
           const cls = 'src-emoji'
             + (isOpen(t, id) ? ' on' : '')
             + (omitted ? ' omitted' : '')
@@ -656,8 +940,8 @@
 
         bar.innerHTML = `${emojiButtons}
           <span class="spacer"></span>
-          <button class="bar-act" data-act="sources">⊞ view sources</button>
-          <button class="bar-act" data-act="all">⊞ expand all</button>`;
+          <button class="bar-act" data-act="sources">⊞ View Sources</button>
+          <button class="bar-act" data-act="all">⊞ Expand All</button>`;
 
         bar.querySelectorAll('.src-emoji').forEach(btn => {
           btn.onclick = (e) => {
@@ -669,41 +953,35 @@
         });
         bar.querySelector('[data-act="sources"]').onclick = (e) => {
           e.stopPropagation();
-          t.hybrid.sources.forEach(id => setOpen(t, id, true));
+          (t.hybrid.sources || []).forEach(id => setOpen(t, id, true));
           renderConv();
         };
         bar.querySelector('[data-act="all"]').onclick = (e) => {
           e.stopPropagation();
-          const anyClosed = t.order.some(id => !isOpen(t, id));
-          t.order.forEach(id => setOpen(t, id, anyClosed));
-          renderConv();
-        };
-        bar.onclick = (e) => {
-          if (e.target.closest('.src-emoji') || e.target.closest('.bar-act')) return;
-          const anyClosed = t.order.some(id => !isOpen(t, id));
-          t.order.forEach(id => setOpen(t, id, anyClosed));
+          const anyClosed = (t.order || []).some(id => !isOpen(t, id));
+          (t.order || []).forEach(id => setOpen(t, id, anyClosed));
           renderConv();
         };
         card.appendChild(bar);
 
-        t.order.forEach(id => {
+        (t.order || []).forEach(id => {
           const ch = CH.find(x => x.id === id);
           if (!ch) return;
-          const raw = t.replies[id];
+          const raw = t.replies ? t.replies[id] : null;
           if (!raw) return;
           const parsed = parseScore(raw);
           const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
-          const body = stripScore(raw);
+          const replyBody = stripScore(raw);
 
           const sr = document.createElement('div');
           sr.className = 'src-reply' + (isOpen(t, id) ? ' open' : '');
           const head2 = document.createElement('div');
           head2.className = 'src-head';
           head2.innerHTML = `<span>${ch.emoji} ${ch.name}</span>
-            <span class="time">${(t.times[id]||0).toFixed(1)}s</span>
+            <span class="time">${((t.times && t.times[id]) || 0).toFixed(1)}s</span>
             ${pct != null ? `<span class="pct ${scoreClass(pct)}">🎯 ${pct}%</span>` : ''}`;
           sr.appendChild(head2);
-          sr.appendChild(document.createTextNode(body));
+          sr.appendChild(document.createTextNode(replyBody));
           if (parsed.reason) {
             const rr = document.createElement('div');
             rr.className = 'src-reason';
@@ -715,10 +993,44 @@
 
         el.appendChild(card);
       }
+
+      if (activeTab !== 'hybrid') {
+        const raw = t.replies ? t.replies[activeTab] : null;
+        if (raw) {
+          const parsed = parseScore(raw);
+          const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
+          const replyBody = stripScore(raw);
+          const ch = CH.find(c => c.id === activeTab) || {};
+
+          const card = document.createElement('div');
+          card.className = 'hybrid-card';
+          const head3 = document.createElement('div');
+          head3.className = 'hybrid-label';
+          head3.textContent = `${ch.emoji || ''} ${ch.name || ''}`;
+          card.appendChild(head3);
+
+          const bd = document.createElement('div');
+          bd.className = 'hybrid-body';
+          bd.textContent = replyBody;
+          card.appendChild(bd);
+
+          if (pct != null) {
+            const sb = document.createElement('div');
+            sb.className = 'score-bar ' + scoreClass(pct);
+            sb.innerHTML = `<span class="pct">🎯 ${pct}%</span>
+              <span class="reason">${parsed.reason}</span>`;
+            sb.onclick = (e) => { e.stopPropagation(); sb.classList.toggle('open'); };
+            card.appendChild(sb);
+          }
+          el.appendChild(card);
+        }
+      }
+
       wrap.appendChild(el);
     });
   }
 
+  // --- HISTORY CONTEXT CALCULATIONS ---
   const hsRange = document.getElementById('hsRange');
   const hsPreview = document.getElementById('hsPreview');
   const hsDepth = document.getElementById('hsDepth');
@@ -742,7 +1054,7 @@
       hsDepth.textContent = '0 turns';
     } else {
       const last = turns[d - 1];
-      if(last) {
+      if (last) {
         hsPreview.innerHTML = `<strong>T${d}:</strong> "${last.prompt.slice(0, 60)}${last.prompt.length > 60 ? '…' : ''}"`;
         hsDepth.textContent = d + ' turn' + (d === 1 ? '' : 's');
       }
@@ -754,6 +1066,7 @@
   }
   hsRange.oninput = updateHistory;
 
+  // --- STATUSBAR TIMINGS & ANIMATION ---
   const sbTimer = document.getElementById('sbTimer');
   const sbStatus = document.getElementById('sbStatus');
   const sbProgress = document.getElementById('sbProgress');
@@ -766,7 +1079,7 @@
     const active = CH.filter(c => c.checked);
     let worst = 0;
     active.forEach(c => {
-      const budget = c.maxTokens >= 1000 ? 1000 : c.maxTokens;
+      const budget = c.isStatic ? 1000 : (c.value * 10);
       worst = Math.max(worst, c.ttft + budget / c.tps + ctxTok / 2000);
     });
     return worst;
@@ -805,24 +1118,39 @@
     }
   }
 
+  // --- LEGEND DIALOG ---
   const LEGENDS = {
     idle: [
-      ['🤖1','ChatGPT'],['🎭2','Claude'],['♊3','Gemini'],['🌊4','DeepSeek'],
-      ['🌌5','Grok'],['💠6','Meta AI'],['🛩️7','Copilot'],['🔭8','Perplexity'],
-      ['🪟','Hybrid'],['🌿','Branch'],['▶','Turn'],
-      ['🔒','Master lock'],['🎯','Score bar'],['✨','Prefix prepend'],
-      ['⊞','Expand all replies'],
+      ['🔒', 'Master Lock / Model Lock: Master overrides individual locks; a model lock freezes that slider.'],
+      ['↕', 'Master Slider: Moves every unlocked model relatively; drag back to ±0 to restore.'],
+      ['⋮⋮', 'Drag Handle: Reorder models via HTML5 drag-and-drop.'],
+      ['✏️', 'Custom Prefix: Edit personalized instructions stored per model.'],
+      ['🔥', 'Visual Heat: Row border/glow shifts from cool blue to orange to glowing gold.'],
+      ['🌿', 'Branch: Fork conversation into alternative paths.'],
+      ['🪟', 'Hybrid Tab: Consolidated synthesized response.']
+    ],
+    reply: [
+      ['🎯', 'Score Bar: Expand the Fidelity Clause rationale.'],
+      ['🦁', 'Source Emoji: Inspect that individual raw model output.'],
+      ['⊞ View Sources', 'Opens replies contributing to the synthesis.'],
+      ['⊞ Expand All', 'Expands/collapses all outputs for the current turn.']
+    ],
+    summary: [
+      ['🆓', 'Summary Bench: Free API summarization pipelines.'],
+      ['⚡', 'Groq API'], ['🧠', 'Cerebras'], ['🟩', 'NVIDIA NIM']
     ]
   };
+
   function setLegendContext(c) {
     document.getElementById('ctxPill').textContent = c;
     document.querySelectorAll('#ctxSwitch button').forEach(b => {
       b.classList.toggle('active', b.dataset.ctx === c);
     });
-    document.getElementById('legendBody').innerHTML = LEGENDS[c]
+    document.getElementById('legendBody').innerHTML = (LEGENDS[c] || [])
       .map(([i, t]) => `<div class="legend-item"><span class="ico">${i}</span><span class="txt">${t}</span></div>`)
       .join('');
   }
+
   document.querySelectorAll('#ctxSwitch button').forEach(b => {
     b.onclick = (e) => { e.stopPropagation(); setLegendContext(b.dataset.ctx); };
   });
@@ -840,141 +1168,174 @@
     }
   });
 
-  function renderAll() { renderTabs(); renderConv(); }
-  renderLeft(); renderAll(); updateHistory(); updateTimer();
-  setLegendContext('idle');
-
-  // ==========================================
-  // --- DEMO SIMULATION LOGIC ---
-  // ==========================================
-
-  let tourStep = 0;
-  const tourOverlay = document.getElementById('tourOverlay');
-  const tourTitle = document.getElementById('tourTitle');
-  const tourText = document.getElementById('tourText');
-  const tourNextBtn = document.getElementById('tourNextBtn');
-  
-  function highlight(elId) {
-    document.querySelectorAll('.tour-highlight').forEach(el => el.classList.remove('tour-highlight'));
-    if(elId) {
-       const el = document.getElementById(elId);
-       if(el) el.style.boxShadow = "0 0 0 4px var(--accent)";
+  function renderAll() {
+    if (turns.length > 0) {
+      hsRange.max = turns.length;
+      if (parseInt(hsRange.value) > turns.length) hsRange.value = turns.length;
     }
+    renderTabs();
+    renderConv();
   }
 
-  tourNextBtn.onclick = () => {
-    tourStep++;
-    if(tourStep === 1) {
-      tourTitle.textContent = "1. Select Your AI Models";
-      tourText.textContent = "On the left, you can check up to 10 different AI models. For this demo, Brave and Google AI are selected.";
-      highlight('tourLeftbar');
-    } else if (tourStep === 2) {
-      tourTitle.textContent = "2. Set the Token Budget";
-      tourText.textContent = "Notice the sliders. If you drag them down, the AI gives a very short answer. If you leave them on ∞, it gives a full, detailed response.";
-      highlight('tourLeftbar');
-    } else if (tourStep === 3) {
-      tourTitle.textContent = "3. Send the Prompt";
-      tourText.textContent = "Now type exactly: 'what does this tool do?' into the prompt box below and click the ⚡ Send button!";
-      highlight('tourBottom');
-      tourOverlay.style.display = 'none';
-      
-      // Auto-fill the prompt for them to make it easy
-      document.getElementById('masterText').value = "what does this tool do?";
-      document.getElementById('masterText').style.boxShadow = "0 0 15px var(--accent)";
-    }
+  // --- INITIALIZE UI ---
+  syncMasterUI();
+  renderLeft();
+  renderAll();
+  updateHistory();
+  updateTimer();
+  setLegendContext('idle');
+
+
+  // ==========================================
+  // --- ELECTRON APP INTEGRATION ---
+  // ==========================================
+
+  // 1. Clear Chat
+  window.clearChat = () => {
+    turns = [];
+    renderAll();
+    const wrap = document.getElementById('convWrap');
+    if (wrap) wrap.innerHTML = '';
+    updateHistory();
   };
 
-  let demoPhase = 0;
+  // 2. Settings: store the DeepSeek key via encrypted IPC
+  const settingsBtn = document.getElementById('settingsBtn');
+  if (settingsBtn) {
+    settingsBtn.onclick = async () => {
+      if (!window.api?.getDeepSeekKeyStatus || !window.api?.setDeepSeekKey) {
+        alert('Settings are available in the Electron desktop app.');
+        return;
+      }
 
+      let status = { configured: false };
+      try {
+        status = await window.api.getDeepSeekKeyStatus();
+      } catch {
+        // Fall through to the prompt; saving will surface any real error.
+      }
+
+      const message = status.source === 'environment'
+        ? 'DEEPSEEK_API_KEY is active and takes precedence. Enter a key to store for future sessions (blank to keep current):'
+        : status.configured
+          ? 'DeepSeek API key is configured. Enter a new key (leave blank to keep it):'
+          : 'Enter your DeepSeek API key:';
+      const key = prompt(message, '');
+      if (key === null || !key.trim()) return;
+
+      try {
+        const result = await window.api.setDeepSeekKey(key.trim());
+        if (result?.ok) {
+          alert('DeepSeek API key saved securely.');
+        } else {
+          alert(result?.error || 'Could not save the DeepSeek API key.');
+        }
+      } catch (error) {
+        alert(`Could not save the DeepSeek API key: ${error.message}`);
+      }
+    };
+  }
+
+  // 3. Send Button Action
   document.getElementById('sendBtn').onclick = () => {
-    const promptText = document.getElementById('masterText').value.trim().toLowerCase();
+    const promptText = document.getElementById('masterText').value.trim();
     if (!promptText) return;
 
-    // If they typed something else, just force it for the demo
-    if(demoPhase === 0 && promptText !== "what does this tool do?") {
-      document.getElementById('masterText').value = "what does this tool do?";
-      return alert("Please type exactly: 'what does this tool do?' to run the demo.");
-    }
-
-    document.getElementById('masterText').style.boxShadow = "none";
-    document.getElementById('masterText').value = '';
-
-    const activeModels = CH.filter(c => c.checked).map(c => c.id);
+    const active = CH.filter(c => c.checked);
+    const activeModels = active.map(c => c.id);
     if (activeModels.length === 0) return alert("Select at least one model.");
+
+    const engine = document.getElementById('engineToggle').value;
+    const customModels = active
+      .filter(c => c.type === 'custom')
+      .map(c => ({
+        id: c.id,
+        name: c.name,
+        endpoint: c.endpoint,
+        apiKey: c.apiKey
+      }));
 
     const newTurn = {
       n: turns.length + 1,
-      prompt: document.getElementById('masterText').value || (demoPhase === 0 ? "what does this tool do?" : "how does the local synthesis work?"),
+      prompt: promptText,
+      engine,
       replies: {},
       order: activeModels,
       times: {},
       hybrid: { text: "Waiting for LLMs...", sources: activeModels, score: 0, reason: "" }
     };
-    
-    // If demoPhase 0, the textbox was just cleared, so grab the forced text
-    if (demoPhase === 0) newTurn.prompt = "what does this tool do?";
-    if (demoPhase === 1) newTurn.prompt = "how does the local synthesis work?";
 
     turns.push(newTurn);
-    renderAll(); 
-    updateTimer(); 
+    document.getElementById('masterText').value = '';
+    renderAll();
+    updateTimer();
     startSend();
 
-    // MOCK SCRAPING DELAY
-    setTimeout(() => {
-      let hasLong = false;
-      activeModels.forEach(id => {
-        const c = CH.find(x => x.id === id);
-        // Use short if slider <= 400, else use long
-        const isShort = c.maxTokens <= 400;
-        if(!isShort) hasLong = true;
-        
-        const textObj = MOCK_RESPONSES[newTurn.prompt];
-        const responseText = isShort ? textObj.short[id] : textObj.long[id];
-        
-        newTurn.replies[id] = responseText + "\n\nSCORE: 9/10\nREASON: Accurately described the tool.";
-      });
-      
-      newTurn.hybrid.text = "Synthesizing...";
-      newTurn.hybrid.reason = "Running local OpenVINO model...";
-      renderAll();
-      
-      // MOCK SYNTHESIS DELAY
-      setTimeout(() => {
-        // Build the hybrid text based on the selected models
-        let hybridText = "";
-        activeModels.forEach(id => {
-           const c = CH.find(x => x.id === id);
-           const isShort = c.maxTokens <= 400;
-           const textObj = MOCK_RESPONSES[newTurn.prompt].hybrid;
-           hybridText += (isShort ? textObj.short[id] : textObj.long[id]) + " ";
-        });
-        
-        newTurn.hybrid.text = hybridText.trim();
-        newTurn.hybrid.score = 100;
-        newTurn.hybrid.reason = "Synthesis Complete";
-        
-        renderAll();
-        
-        // TRIGGER FOLLOW-UP
-        if(demoPhase === 0) {
-          demoPhase = 1;
-          setTimeout(() => {
-            document.getElementById('masterText').value = "how does the local synthesis work?";
-            document.getElementById('masterText').style.boxShadow = "0 0 15px var(--green)";
-            
-            // Auto-click send after 3 seconds
-            setTimeout(() => {
-               if(document.getElementById('masterText').value === "how does the local synthesis work?") {
-                  document.getElementById('sendBtn').click();
-               }
-            }, 3000);
-          }, 2000);
-        }
-      }, 2000);
-    }, 1500);
+    if (window.api?.sendPrompt) {
+      window.api.sendPrompt(promptText, activeModels, engine, customModels);
+    }
   };
 
+  // 4. LLM Individual Replies via IPC
+  if (window.api?.onReplyReceived) {
+    window.api.onReplyReceived((data) => {
+      const currentTurn = turns[turns.length - 1];
+      if (currentTurn) {
+        if (data.text) currentTurn.replies[data.model] = data.text;
+        if (!currentTurn.order.includes(data.model)) {
+          currentTurn.order.push(data.model);
+        }
+        currentTurn.hybrid.text = "Synthesizing...";
+        currentTurn.hybrid.reason = String(currentTurn.engine || '').includes('Cloud')
+          ? "Running DeepSeek cloud synthesis..."
+          : "Running local OpenVINO model...";
+        renderAll();
+      }
+    });
+  }
+
+  // 5. Hybrid Stream via IPC
+  if (window.api?.onHybridStream) {
+    window.api.onHybridStream((chunk) => {
+      const currentTurn = turns[turns.length - 1];
+      if (currentTurn && currentTurn.hybrid) {
+        const placeholder = currentTurn.hybrid.text;
+        if (placeholder === "Synthesizing..." || placeholder === "Waiting for LLMs...") {
+          currentTurn.hybrid.text = "";
+        }
+        currentTurn.hybrid.text += chunk;
+
+        const allTurns = document.querySelectorAll('.turn');
+        if (allTurns.length > 0) {
+          const lastTurn = allTurns[allTurns.length - 1];
+          const hybridBody = lastTurn.querySelector('.hybrid-body');
+          if (hybridBody) {
+            hybridBody.textContent = currentTurn.hybrid.text;
+            const centerPanel = document.querySelector('.center');
+            if (centerPanel) centerPanel.scrollTop = centerPanel.scrollHeight;
+          }
+        }
+      }
+    });
+  }
+
+  // 6. Hybrid Synthesis Complete via IPC
+  if (window.api?.onHybridComplete) {
+    window.api.onHybridComplete(() => {
+      const currentTurn = turns[turns.length - 1];
+      if (currentTurn) {
+        currentTurn.hybrid.score = 100;
+        currentTurn.hybrid.reason = "Synthesis Complete";
+
+        const scoreBars = document.querySelectorAll('.score-bar');
+        if (scoreBars.length > 0) {
+          const lastScoreBar = scoreBars[scoreBars.length - 1];
+          lastScoreBar.className = 'score-bar';
+          lastScoreBar.innerHTML = `<span class="pct">🎯 100%</span><span class="reason">Synthesis Complete</span>`;
+        }
+      }
+    });
+  }
 </script>
 </body>
 </html>
