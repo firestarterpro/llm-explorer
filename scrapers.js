@@ -1,10 +1,23 @@
-const { chromium } = require('playwright');
 const { app } = require('electron');
 const path = require('path');
+const fs = require('fs');
+
+// Playwright resolves its browser folder once, when it is first required, so
+// this has to run before the require below. A packaged build ships Chromium as
+// resources/ms-playwright (see package.json "extraResources"); in development
+// we prefer the locally installed pw-browsers folder over the machine cache, so
+// a clean checkout behaves like the installer.
+if (app && app.isPackaged) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(process.resourcesPath, 'ms-playwright');
+} else if (!process.env.PLAYWRIGHT_BROWSERS_PATH && fs.existsSync(path.join(__dirname, 'pw-browsers'))) {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = path.join(__dirname, 'pw-browsers');
+}
+
+const { chromium } = require('playwright');
 
 // Profile directories must be writable at runtime. In a packaged app __dirname
 // points into app.asar, which is read-only, so keep sessions under userData.
-// main.js uses this same helper for Login Mode, so login and scraping share
+// Login Mode and scraping both reach this through launchContext(), so they share
 // one persistent session per provider.
 function getProfileDir(name) {
   const root = app && app.isPackaged
@@ -13,7 +26,27 @@ function getProfileDir(name) {
   return path.join(root, `user_data_${name}`);
 }
 
-const getDataDir = getProfileDir;
+// The single Playwright entry point for the app. Scraping and Login Mode must
+// launch with identical options, otherwise the same profile is opened by two
+// different browser configurations and the saved session stops matching.
+// opts: { headless?, viewport? }.
+async function launchContext(id, opts = {}) {
+  const userDataDir = getProfileDir(id);
+  fs.mkdirSync(userDataDir, { recursive: true });
+
+  return chromium.launchPersistentContext(userDataDir, {
+    headless: opts.headless === true,
+    // scripts/install-browsers.js installs with --no-shell, so only the full
+    // Chromium build ships. Playwright would otherwise look for the separate
+    // chrome-headless-shell binary when headless is requested.
+    ...(opts.headless === true ? { channel: 'chromium' } : {}),
+    viewport: opts.viewport || { width: 1280, height: 800 },
+    // --no-sandbox and a hard-coded Chrome/120 user agent were both removed:
+    // they weakened the browser sandbox and made the browser fingerprint
+    // inconsistent between Login Mode and scraping.
+    args: ['--disable-blink-features=AutomationControlled']
+  });
+}
 
 // Response completion tuning. A provider can override timeoutMs and may supply
 // a doneSelector that is visible while a reply is generating.
@@ -35,14 +68,8 @@ async function genericScrape(config, promptText) {
   const startedAt = Date.now();
   let context;
   try {
-    context = await chromium.launchPersistentContext(getDataDir(config.id), {
-      headless: false, // Set to true once you verify they all work!
-      viewport: { width: 1280, height: 800 },
-      args: ['--disable-blink-features=AutomationControlled', '--no-sandbox'],
-      userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
-
-    const page = await context.newPage();
+    context = await launchContext(config.id);
+    const page = context.pages()[0] || await context.newPage();
     console.log(`Navigating to ${config.name}...`);
     await page.goto(config.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(3000); // Wait for React to hydrate
@@ -149,7 +176,7 @@ async function genericScrape(config, promptText) {
       ms: Date.now() - startedAt
     };
   } finally {
-    if (context) await context.close();
+    if (context) await context.close().catch(() => {});
   }
 }
 
@@ -158,5 +185,6 @@ async function genericScrape(config, promptText) {
 // (user-added), loaded by main.js. This module only knows how to run a config.
 module.exports = {
   scrape: (config, prompt) => genericScrape(config, prompt),
+  launchContext,
   getProfileDir
 };

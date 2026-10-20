@@ -2,7 +2,6 @@ const { app, BrowserWindow, ipcMain, safeStorage, dialog } = require('electron')
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
-const { chromium } = require('playwright');
 const scrapers = require('./scrapers');
 
 const PYTHON_SCRIPT_PATH = 'C:\\llm\\src\\synthesize.py';
@@ -178,7 +177,11 @@ function buildProviderConfig(input, base = {}) {
     provider.endpoint = assertHttpUrl(input.endpoint ?? base.endpoint, 'Endpoint');
     provider.modelId = String(input.modelId ?? base.modelId ?? '').trim();
     if (!provider.modelId) throw new Error('Model ID is required for an API provider.');
-    provider.keyRef = String(input.keyRef ?? base.keyRef ?? `provider:${provider.id}`).trim();
+    // Never trust a renderer-supplied keyRef. A crafted config such as
+    // { endpoint: 'https://evil', keyRef: 'deepseek' } would otherwise send the
+    // DeepSeek key to an attacker's endpoint. Provider keys are namespaced by
+    // the id that main.js assigned, so one provider can only ever use its own.
+    provider.keyRef = `provider:${provider.id}`;
     provider.isStatic = false;
     delete provider.url;
     delete provider.inputSelector;
@@ -421,6 +424,13 @@ function createWindow() {
       contextIsolation: true
     }
   });
+
+  // This window is a local app shell, not a browser. A dropped file or a
+  // target="_blank" link must not replace index.html, because the resulting
+  // page would inherit the preload bridge (window.api).
+  win.webContents.on('will-navigate', event => event.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
   win.loadFile('index.html');
 }
 
@@ -954,16 +964,10 @@ app.whenReady().then(() => {
       const id = config.id;
       let context;
       try {
-        // In a packaged app __dirname lives inside app.asar (read-only), so the
-        // profile must live under userData. scrapers.js uses the same helper,
-        // which means Login Mode and scraping share one session.
-        const userDataDir = scrapers.getProfileDir(id);
-        fs.mkdirSync(userDataDir, { recursive: true });
-
-        context = await chromium.launchPersistentContext(userDataDir, {
-          headless: false,
-          viewport: { width: 1024, height: 768 },
-          args: ['--disable-blink-features=AutomationControlled']
+        // scrapers.js owns the profile path and launch options, so Login Mode
+        // and scraping open the same persistent session per provider.
+        context = await scrapers.launchContext(id, {
+          viewport: { width: 1024, height: 768 }
         });
 
         // Register the listener before navigating so a window closed while the
