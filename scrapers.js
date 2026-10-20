@@ -26,6 +26,28 @@ function getProfileDir(name) {
   return path.join(root, `user_data_${name}`);
 }
 
+// Every persistent context launched here is tracked so quit can close them
+// deterministically. Playwright only cleans up after a normal process exit; if
+// the app is force-closed, chrome.exe would otherwise keep running.
+const openContexts = new Set();
+
+function trackContext(context) {
+  openContexts.add(context);
+  context.once('close', () => openContexts.delete(context));
+  return context;
+}
+
+// Called from main.js on before-quit. Closing twice is harmless: Playwright
+// makes close() idempotent, and a context that already closed is gone from the
+// set.
+async function closeAll() {
+  const contexts = [...openContexts];
+  openContexts.clear();
+  await Promise.all(contexts.map(context => context.close().catch(error => {
+    console.warn('Could not close a Playwright context:', error.message);
+  })));
+}
+
 // The single Playwright entry point for the app. Scraping and Login Mode must
 // launch with identical options, otherwise the same profile is opened by two
 // different browser configurations and the saved session stops matching.
@@ -34,7 +56,7 @@ async function launchContext(id, opts = {}) {
   const userDataDir = getProfileDir(id);
   fs.mkdirSync(userDataDir, { recursive: true });
 
-  return chromium.launchPersistentContext(userDataDir, {
+  const context = await chromium.launchPersistentContext(userDataDir, {
     headless: opts.headless === true,
     // scripts/install-browsers.js installs with --no-shell, so only the full
     // Chromium build ships. Playwright would otherwise look for the separate
@@ -46,6 +68,7 @@ async function launchContext(id, opts = {}) {
     // inconsistent between Login Mode and scraping.
     args: ['--disable-blink-features=AutomationControlled']
   });
+  return trackContext(context);
 }
 
 // Response completion tuning. A provider can override timeoutMs and may supply
@@ -186,5 +209,6 @@ async function genericScrape(config, promptText) {
 module.exports = {
   scrape: (config, prompt) => genericScrape(config, prompt),
   launchContext,
-  getProfileDir
+  getProfileDir,
+  closeAll
 };

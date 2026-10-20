@@ -1027,8 +1027,23 @@ app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
 });
 
-// Stop any synthesis still running so no Python process outlives the app.
-app.on('before-quit', () => {
+// Stop any synthesis still running and close every Playwright context, so no
+// Python or chrome.exe process outlives the app. The quit is deferred until
+// closeAll() resolves; app.exit() does not emit before-quit, so this cannot
+// loop.
+let quitting = false;
+app.on('before-quit', async (event) => {
+  if (quitting) return;
+  quitting = true;
+  event.preventDefault();
+
   for (const child of activeChildren) child.kill();
   activeChildren.clear();
+
+  // A wedged browser launch must not make the app unquittable.
+  await Promise.race([
+    scrapers.closeAll(),
+    new Promise(resolve => setTimeout(resolve, 5000))
+  ]);
+  app.exit(0);
 });
