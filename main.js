@@ -48,6 +48,9 @@ function sendEngineError(event, turnId, message) {
 // userData/providers.json and is merged on top by id, so adding a site or an
 // API model never requires a code edit.
 const BUILTIN_PROVIDERS_PATH = path.join(__dirname, 'providers.json');
+// Templates are installable presets. They live in the app bundle and are never
+// edited; adding one copies it into userData/providers.json.
+const TEMPLATES_PATH = path.join(__dirname, 'templates.json');
 const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
 
 function userProvidersPath() {
@@ -59,7 +62,8 @@ function readProviderFile(filePath) {
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     const list = Array.isArray(parsed)
       ? parsed
-      : parsed && Array.isArray(parsed.providers) ? parsed.providers : [];
+      : parsed && Array.isArray(parsed.templates) ? parsed.templates
+        : parsed && Array.isArray(parsed.providers) ? parsed.providers : [];
     return list.filter(item => item && typeof item === 'object' && item.id);
   } catch (error) {
     if (error.code !== 'ENOENT') console.error(`Could not read ${filePath}:`, error.message);
@@ -100,6 +104,23 @@ function loadProviders() {
     merged.set(provider.id, provider); // user entries win by id
   }
   return [...merged.values()];
+}
+
+// Templates use the same shape as provider configs. `requiresKey` and
+// `description` are picker metadata; addProvider drops them before writing.
+function loadTemplates() {
+  return readProviderFile(TEMPLATES_PATH).map(template => {
+    const kind = template.kind === 'api' ? 'api' : 'scrape';
+    return {
+      ...template,
+      id: String(template.id).trim(),
+      name: String(template.name || template.id).trim(),
+      emoji: typeof template.emoji === 'string' && template.emoji
+        ? template.emoji
+        : (kind === 'api' ? '🧩' : '🌐'),
+      kind
+    };
+  });
 }
 
 function slugifyProviderId(value) {
@@ -204,6 +225,9 @@ function buildProviderConfig(input, base = {}) {
   delete provider.isUser;
   // Keys never go in a provider file; they belong in the encrypted store.
   delete provider.apiKey;
+  // Template-picker metadata is not part of a provider config.
+  delete provider.requiresKey;
+  delete provider.description;
 
   return provider;
 }
@@ -812,6 +836,9 @@ app.whenReady().then(() => {
 
   // 2. Provider registry. User entries live in userData/providers.json.
   ipcMain.handle('providers:list', () => loadProviders());
+
+  // Installable presets from the read-only templates.json in the app bundle.
+  ipcMain.handle('templates:list', () => loadTemplates());
 
   ipcMain.handle('providers:add', (event, cfg) => {
     try {

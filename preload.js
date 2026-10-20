@@ -10,6 +10,8 @@ contextBridge.exposeInMainWorld('api', {
 
   // Provider registry
   getProviders: () => ipcRenderer.invoke('providers:list'),
+  // Read-only installable presets from templates.json.
+  getTemplates: () => ipcRenderer.invoke('templates:list'),
   addProvider: (cfg) => ipcRenderer.invoke('providers:add', cfg),
   editProvider: (id, cfg) => ipcRenderer.invoke('providers:edit', id, cfg),
   removeProvider: (id) => ipcRenderer.invoke('providers:remove', id),

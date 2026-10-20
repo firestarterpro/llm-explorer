@@ -237,6 +237,48 @@
   .app-modal-actions button { flex: 1; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; }
   .app-modal-actions button.primary { background: var(--accent); color: #000; }
   .app-modal-actions button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+  .app-modal-error { color: var(--accent-2); font-size: 13px; margin-top: 12px; }
+
+  /* TEMPLATE PICKER + UNIFIED SETTINGS */
+  /* These panels can open the shared field dialog, so they stack below it. */
+  #templateModal, #settingsModal { z-index: 900; }
+  #templateBtn { margin-top: 8px; }
+  .template-panel { width: min(760px, 100%); }
+  .template-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; max-height: 52vh; overflow-y: auto; padding: 2px; }
+  .template-card { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; text-align: left; padding: 14px; border-radius: 10px; border: 1px solid var(--border); background: rgba(0,0,0,0.32); color: var(--text); font: inherit; cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
+  .template-card:hover, .template-card:focus-visible { border-color: var(--accent); box-shadow: 0 12px 32px rgba(0,240,255,0.12); transform: translateY(-2px); outline: none; }
+  .template-card:disabled { opacity: 0.5; cursor: wait; transform: none; }
+  .template-emoji { font-size: 24px; line-height: 1; }
+  .template-name { font-size: 14px; font-weight: 700; }
+  .template-kind { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+  .template-desc { font-size: 11px; line-height: 1.5; color: var(--text-muted); }
+  .template-empty { grid-column: 1 / -1; padding: 26px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  .template-status { margin-top: 14px; padding: 10px 12px; border-radius: 8px; font-size: 13px; border: 1px solid var(--border); color: var(--text-muted); }
+  .template-status[hidden] { display: none; }
+  .template-status.error { border-color: rgba(255,0,85,0.45); background: rgba(255,0,85,0.08); color: var(--accent-2); }
+  .template-status.success { border-color: rgba(0,240,255,0.45); background: rgba(0,240,255,0.08); color: var(--accent); }
+
+  .settings-panel { width: min(640px, 100%); }
+  .settings-section { border: 1px solid var(--border); border-radius: 10px; padding: 16px; margin-bottom: 16px; background: rgba(0,0,0,0.25); }
+  .settings-section h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 12px; }
+  .settings-key-list { display: flex; flex-direction: column; gap: 8px; }
+  .settings-key-row { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 8px; background: rgba(0,0,0,0.3); }
+  .settings-key-emoji { font-size: 18px; flex: 0 0 auto; }
+  .settings-key-meta { flex: 1; min-width: 0; }
+  .settings-key-name { font-size: 14px; font-weight: 600; }
+  .settings-key-detail { font-size: 11px; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .settings-key-status { flex: 0 0 auto; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; padding: 4px 8px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+  .settings-key-status.on { color: #000; background: var(--accent); border-color: var(--accent); }
+  .settings-key-row button { flex: 0 0 auto; padding: 7px 12px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font: inherit; font-size: 12px; cursor: pointer; }
+  .settings-key-row button:hover { background: rgba(0,240,255,0.1); }
+  .settings-hint { font-size: 12px; line-height: 1.5; color: var(--text-muted); }
+  .settings-danger { border-color: rgba(255,0,85,0.4); }
+  .settings-danger h3 { color: var(--accent-2); }
+  .settings-danger button { margin-top: 12px; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--accent-2); background: transparent; color: var(--accent-2); font: inherit; font-weight: 700; cursor: pointer; }
+  .settings-danger button:hover { background: rgba(255,0,85,0.1); }
+  .settings-status { margin-top: 10px; font-size: 12px; color: var(--accent); }
+  .settings-status[hidden] { display: none; }
+  .settings-empty { color: var(--text-muted); font-size: 13px; }
 
   /* LOCAL ENGINE TROUBLESHOOTING MODAL */
   #troubleshootModal .app-modal-panel { border-color: var(--accent-2); box-shadow: 0 0 48px rgba(255, 0, 85, 0.18); }
@@ -306,6 +348,10 @@
       </div>
 
       <div id="llmList" class="llm-list-container"></div>
+
+      <button id="templateBtn" type="button" class="add-custom-btn electron-only" title="Install a preset model">
+        ➕ Add from Template
+      </button>
     </div>
     <div class="mini-rail" id="miniRail">
       <button class="mini-toggle" id="miniToggle" aria-label="Expand sidebar">☰</button>
@@ -473,6 +519,51 @@
 
     <div class="onboarding-actions">
       <button type="button" class="onboarding-skip" id="onboardingSkip">Skip for now</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add from Template -->
+<div class="app-modal" id="templateModal" hidden>
+  <div class="app-modal-panel template-panel" role="dialog" aria-modal="true" aria-labelledby="templateTitle">
+    <h2 id="templateTitle">➕ Add from Template</h2>
+    <p class="app-modal-message">
+      Pick an inactive model. Website templates reuse your logged-in browser sessions;
+      API templates ask for a key before they are added.
+    </p>
+    <div class="template-grid" id="templateGrid"></div>
+    <div class="template-status" id="templateStatus" hidden></div>
+    <div class="app-modal-actions">
+      <button type="button" class="secondary" id="templateClose">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Unified Settings -->
+<div class="app-modal" id="settingsModal" hidden>
+  <div class="app-modal-panel settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <h2 id="settingsTitle">⚙ Settings</h2>
+    <p class="app-modal-message">
+      Keys are encrypted by the operating system. Existing keys are never shown in the page.
+    </p>
+
+    <div class="settings-section">
+      <h3>API Keys</h3>
+      <div class="settings-key-list" id="settingsKeyList"></div>
+    </div>
+
+    <div class="settings-section settings-danger">
+      <h3>Conversations</h3>
+      <p class="settings-hint">
+        Delete every conversation in this app session and remove saved conversation data from
+        localStorage. API keys and model preferences are kept.
+      </p>
+      <button type="button" id="clearConversationsBtn">🗑️ Clear All Conversations</button>
+      <div class="settings-status" id="settingsStatus" hidden></div>
+    </div>
+
+    <div class="app-modal-actions">
+      <button type="button" class="secondary" id="settingsClose">Close</button>
     </div>
   </div>
 </div>
@@ -985,6 +1076,175 @@
 
     await refreshProviders();
     saveUiPrefs();
+  }
+
+  // --- ADD FROM TEMPLATE ---------------------------------------------------
+  // The Electron renderer is sandboxed, so main reads templates.json and the
+  // preload exposes the list. The browser demo can fall back to fetch().
+  const templateModal = document.getElementById('templateModal');
+  const templateGrid = document.getElementById('templateGrid');
+  const templateStatus = document.getElementById('templateStatus');
+  const templateClose = document.getElementById('templateClose');
+
+  async function fetchTemplates() {
+    if (transport.getTemplates) {
+      const list = await transport.getTemplates();
+      return Array.isArray(list) ? list : [];
+    }
+    const response = await fetch('templates.json', { cache: 'no-cache' });
+    if (!response.ok) throw new Error(`templates.json could not be read (${response.status}).`);
+    const parsed = await response.json();
+    const list = Array.isArray(parsed) ? parsed : (parsed.templates || parsed.providers || []);
+    return Array.isArray(list) ? list : [];
+  }
+
+  function setTemplateStatus(text, kind) {
+    if (!templateStatus) return;
+    templateStatus.textContent = text || '';
+    templateStatus.hidden = !text;
+    templateStatus.className = 'template-status' + (kind ? ` ${kind}` : '');
+  }
+
+  function buildTemplateCard(template) {
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'template-card';
+    card.title = template.description || '';
+
+    const emoji = document.createElement('span');
+    emoji.className = 'template-emoji';
+    emoji.textContent = template.emoji || (template.kind === 'api' ? '🧩' : '🌐');
+
+    const name = document.createElement('span');
+    name.className = 'template-name';
+    name.textContent = template.name || template.id;
+
+    const kind = document.createElement('span');
+    kind.className = 'template-kind';
+    if (template.kind === 'api') {
+      kind.textContent = template.requiresKey === false ? 'API · no key needed' : 'API · key required';
+    } else {
+      kind.textContent = 'Website · scraper';
+    }
+
+    const description = document.createElement('span');
+    description.className = 'template-desc';
+    description.textContent = template.description || '';
+
+    card.append(emoji, name, kind, description);
+    card.onclick = () => addFromTemplate(template, card);
+    return card;
+  }
+
+  function appendTemplateEmpty() {
+    const empty = document.createElement('div');
+    empty.className = 'template-empty';
+    empty.textContent = 'Every template is already in your model list.';
+    templateGrid.appendChild(empty);
+  }
+
+  async function renderTemplateList() {
+    if (!templateGrid) return;
+    templateGrid.innerHTML = '';
+
+    let installed = new Set();
+    if (transport.getProviders) {
+      try {
+        const providers = await transport.getProviders();
+        if (Array.isArray(providers)) installed = new Set(providers.map(provider => String(provider.id)));
+      } catch {
+        // Fall back to the rendered list; addProvider still enforces unique ids.
+        installed = new Set(CH.map(channel => channel.id));
+      }
+    }
+
+    let templates = [];
+    try {
+      templates = await fetchTemplates();
+    } catch (error) {
+      setTemplateStatus(error.message, 'error');
+      return;
+    }
+
+    const available = templates.filter(template => template && template.id && !installed.has(String(template.id)));
+    if (!available.length) {
+      appendTemplateEmpty();
+      return;
+    }
+    available.forEach(template => templateGrid.appendChild(buildTemplateCard(template)));
+  }
+
+  async function openTemplateModal() {
+    if (!templateModal || !transport.addProvider) {
+      alert('Templates are available in the Electron desktop app.');
+      return;
+    }
+    setTemplateStatus('');
+    templateModal.hidden = false;
+    await renderTemplateList();
+    const firstCard = templateGrid.querySelector('.template-card');
+    if (firstCard) firstCard.focus();
+  }
+
+  async function addFromTemplate(template, card) {
+    // Prompt for the key BEFORE writing the provider, as the template flow
+    // promises. A cancelled prompt adds nothing.
+    let apiKey = '';
+    if (template.kind === 'api' && template.requiresKey !== false) {
+      const values = await showAppModal({
+        title: `${template.name || template.id} API Key`,
+        message: 'This key is encrypted by the operating system and never stored in the page.',
+        confirmLabel: 'Add model',
+        fields: [{ name: 'key', label: 'API key', type: 'password', placeholder: 'sk-...', required: true }]
+      });
+      if (!values) return;
+      apiKey = values.key.trim();
+    }
+
+    if (card) card.disabled = true;
+    setTemplateStatus(`Adding ${template.name || template.id}…`);
+
+    try {
+      // The template shape is already a provider config. `requiresKey` and
+      // `description` are stripped by main before the file is written.
+      const created = await transport.addProvider({ ...template, checked: true });
+      if (!created?.ok) {
+        setTemplateStatus(created?.error || 'Could not add the template.', 'error');
+        if (card) card.disabled = false;
+        return;
+      }
+
+      const id = created.provider?.id || template.id;
+      let keyWarning = '';
+      if (apiKey && created.provider?.keyRef) {
+        const saved = await transport.setKey(created.provider.keyRef, apiKey);
+        if (!saved?.ok) {
+          keyWarning = ` ${template.name || template.id} was added, but its key was not saved: ${saved?.error || 'unknown error'}`;
+        }
+      }
+
+      hiddenIds.delete(id);
+      await refreshProviders();
+      saveUiPrefs();
+
+      if (card) card.remove();
+      if (!templateGrid.querySelector('.template-card')) appendTemplateEmpty();
+
+      setTemplateStatus(
+        keyWarning || `✓ ${template.name || template.id} added to Active Models.`,
+        keyWarning ? 'error' : 'success'
+      );
+    } catch (error) {
+      setTemplateStatus(`Could not add the template: ${error.message}`, 'error');
+      if (card) card.disabled = false;
+    }
+  }
+
+  if (templateClose) templateClose.onclick = () => { templateModal.hidden = true; };
+  if (templateModal) {
+    templateModal.onclick = event => {
+      if (event.target === templateModal) templateModal.hidden = true;
+    };
   }
 
   // Edits an existing provider in place. Built-ins are edited by writing a
@@ -2510,7 +2770,169 @@
     return false;
   }
 
-  if (settingsBtn) settingsBtn.onclick = () => { openDeepSeekSettings(); };
+  // --- UNIFIED SETTINGS ----------------------------------------------------
+  const settingsModal = document.getElementById('settingsModal');
+  const settingsKeyList = document.getElementById('settingsKeyList');
+  const settingsStatus = document.getElementById('settingsStatus');
+  const settingsClose = document.getElementById('settingsClose');
+  const clearConversationsBtn = document.getElementById('clearConversationsBtn');
+  // Conversation persistence keys. The tree is in memory today, but the same
+  // prefix is reserved for the Phase 3.5 store, so the wipe covers both.
+  const CONVO_STORAGE_RE = /^llmx\.(convo|conversation|turn|chat|tree)/i;
+
+  // DeepSeek's engine key is always listed; every active API provider adds its
+  // own keyRef. Hidden providers are not "active" and are intentionally absent.
+  function apiKeyEntries() {
+    const entries = [{ ref: 'deepseek', name: 'DeepSeek', emoji: '🌊', detail: 'Cloud synthesis engine' }];
+    CH.filter(channel => channel.kind === 'api' && channel.keyRef).forEach(channel => {
+      const ref = channel.keyRef;
+      if (entries.some(entry => entry.ref === ref)) return;
+      entries.push({
+        ref,
+        name: channel.name,
+        emoji: channel.emoji || '🧩',
+        detail: channel.modelId || channel.endpoint || 'API model'
+      });
+    });
+    return entries;
+  }
+
+  function setSettingsStatus(text) {
+    if (!settingsStatus) return;
+    settingsStatus.textContent = text || '';
+    settingsStatus.hidden = !text;
+  }
+
+  async function renderSettingsKeys() {
+    if (!settingsKeyList) return;
+    settingsKeyList.innerHTML = '<div class="settings-empty">Checking keys…</div>';
+
+    const entries = apiKeyEntries();
+    const rows = await Promise.all(entries.map(async entry => {
+      let configured = false;
+      if (transport.hasKey) {
+        try { configured = !!(await transport.hasKey(entry.ref)); } catch { configured = false; }
+      }
+      return { ...entry, configured };
+    }));
+
+    settingsKeyList.innerHTML = '';
+    rows.forEach(entry => {
+      const row = document.createElement('div');
+      row.className = 'settings-key-row';
+
+      const emoji = document.createElement('span');
+      emoji.className = 'settings-key-emoji';
+      emoji.textContent = entry.emoji;
+
+      const meta = document.createElement('div');
+      meta.className = 'settings-key-meta';
+      const name = document.createElement('div');
+      name.className = 'settings-key-name';
+      name.textContent = entry.name;
+      const detail = document.createElement('div');
+      detail.className = 'settings-key-detail';
+      detail.textContent = `${entry.detail} · ${entry.ref}`;
+      meta.append(name, detail);
+
+      const status = document.createElement('span');
+      status.className = 'settings-key-status' + (entry.configured ? ' on' : '');
+      status.textContent = entry.configured ? 'Configured' : 'Not set';
+
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = entry.configured ? 'Replace' : 'Set key';
+      button.onclick = () => promptForKey(entry);
+
+      row.append(emoji, meta, status, button);
+      settingsKeyList.appendChild(row);
+    });
+  }
+
+  async function promptForKey(entry) {
+    if (!transport.setKey) return;
+    const values = await showAppModal({
+      title: `${entry.name} API Key`,
+      message: entry.configured
+        ? 'A key is already stored. Enter a new key to replace it.'
+        : 'The key is encrypted by the operating system and never stored in the page.',
+      confirmLabel: 'Save',
+      fields: [{ name: 'key', label: 'API key', type: 'password', placeholder: 'sk-...', required: true }]
+    });
+    if (!values) return;
+
+    try {
+      const result = await transport.setKey(entry.ref, values.key.trim());
+      if (!result?.ok) {
+        setSettingsStatus(result?.error || 'Could not save the API key.');
+        return;
+      }
+    } catch (error) {
+      setSettingsStatus(`Could not save the API key: ${error.message}`);
+      return;
+    }
+    setSettingsStatus(`${entry.name} key saved.`);
+    await renderSettingsKeys();
+  }
+
+  async function openSettings() {
+    if (!transport.hasKey || !transport.setKey) {
+      alert('Settings are available in the Electron desktop app.');
+      return;
+    }
+    if (!settingsModal) return;
+    setSettingsStatus('');
+    settingsModal.hidden = false;
+    await renderSettingsKeys();
+    if (settingsClose) settingsClose.focus();
+  }
+
+  function clearAllConversations() {
+    if (!confirm('Delete every conversation? This cannot be undone.')) return;
+
+    convo.nodes = {};
+    convo.rootIds = [];
+    convo.activeLeafId = null;
+    Object.keys(openState).forEach(key => delete openState[key]);
+    lastPrompt = null;
+    activeTab = 'hybrid';
+    hsRange.value = '0';
+
+    // Wipe saved conversation keys. Keys live in main's encrypted store, so
+    // they are deliberately untouched here.
+    try {
+      for (const key of Object.keys(localStorage)) {
+        if (CONVO_STORAGE_RE.test(key)) localStorage.removeItem(key);
+      }
+    } catch {
+      // localStorage may be unavailable; the in-memory tree is still cleared.
+    }
+
+    renderAll();
+    updateHistory();
+    setSettingsStatus('All conversations cleared.');
+  }
+
+  if (settingsBtn) settingsBtn.onclick = openSettings;
+  if (settingsClose) settingsClose.onclick = () => { settingsModal.hidden = true; };
+  if (settingsModal) {
+    settingsModal.onclick = event => {
+      if (event.target === settingsModal) settingsModal.hidden = true;
+    };
+  }
+  if (clearConversationsBtn) clearConversationsBtn.onclick = clearAllConversations;
+
+  const templateBtn = document.getElementById('templateBtn');
+  if (templateBtn) templateBtn.onclick = openTemplateModal;
+
+  document.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    // showAppModal owns Escape while its field dialog is on top.
+    const appModal = document.getElementById('appModal');
+    if (appModal && !appModal.hidden) return;
+    if (templateModal && !templateModal.hidden) templateModal.hidden = true;
+    if (settingsModal && !settingsModal.hidden) settingsModal.hidden = true;
+  });
 
   // --- ONBOARDING WIZARD --------------------------------------------------
   const ONBOARDED_KEY = 'llmx.onboarded';
