@@ -246,6 +246,33 @@
   .troubleshoot-hint { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
   #troubleshootModal .app-modal-actions button.secondary { border-color: var(--accent); color: var(--accent); }
 
+  /* ONBOARDING WIZARD */
+  #onboardingModal { z-index: 1200; }
+  #onboardingModal .onboarding-panel { width: min(720px, 100%); border-color: var(--accent); box-shadow: 0 0 64px var(--accent-glow); }
+  #onboardingModal h2 { color: var(--accent); font-size: 30px; letter-spacing: -0.02em; margin-bottom: 10px; }
+  .onboarding-eyebrow { font-size: 11px; text-transform: uppercase; letter-spacing: 0.18em; color: var(--accent); margin-bottom: 10px; }
+  .onboarding-lede { line-height: 1.6; margin-bottom: 22px; }
+  .onboarding-choice-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .onboarding-choice { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 8px; text-align: left; padding: 20px; border-radius: 12px; border: 1px solid var(--border); background: rgba(0, 0, 0, 0.32); color: var(--text); font: inherit; cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
+  .onboarding-choice:hover, .onboarding-choice:focus-visible { border-color: var(--accent); box-shadow: 0 12px 32px rgba(0, 240, 255, 0.12); transform: translateY(-2px); outline: none; }
+  .onboarding-choice .oc-icon { font-size: 28px; line-height: 1; }
+  .onboarding-choice .oc-badge { position: absolute; top: 14px; right: 14px; font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.12em; color: #000; background: var(--accent); border-radius: 999px; padding: 4px 8px; }
+  .onboarding-choice .oc-title { font-size: 18px; font-weight: 700; }
+  .onboarding-choice .oc-desc { font-size: 13px; line-height: 1.5; color: var(--text-muted); min-height: 58px; }
+  .onboarding-choice .oc-cta { margin-top: auto; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); }
+  .onboarding-login-step { margin-top: 16px; padding: 16px; border: 1px dashed var(--accent); border-radius: 10px; background: rgba(0, 240, 255, 0.05); }
+  .onboarding-login-step p { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin-bottom: 12px; }
+  .onboarding-login-step .primary { padding: 12px 18px; border: none; border-radius: 6px; background: var(--accent); color: #000; font-weight: 700; cursor: pointer; }
+  .onboarding-login-step[hidden] { display: none; }
+  .onboarding-actions { display: flex; justify-content: flex-end; margin-top: 20px; }
+  .onboarding-skip { background: none; border: none; color: var(--text-muted); font: inherit; font-size: 13px; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; padding: 6px 0; }
+  .onboarding-skip:hover { color: var(--text); }
+  @media (max-width: 640px) {
+    .onboarding-choice-grid { grid-template-columns: 1fr; }
+    #onboardingModal .app-modal-panel { padding: 22px; }
+    .onboarding-choice .oc-desc { min-height: 0; }
+  }
+
   /* BROWSER DEMO: controls that need Electron/Playwright */
   .demo-mode .electron-only { display: none !important; }
 </style>
@@ -406,6 +433,46 @@
     <div class="app-modal-actions">
       <button type="button" class="secondary" id="troubleshootUseCloud">Use DeepSeek API</button>
       <button type="button" class="primary" id="troubleshootRetry">Retry</button>
+    </div>
+  </div>
+</div>
+
+<!-- First-run Onboarding Wizard -->
+<div class="app-modal" id="onboardingModal" hidden>
+  <div class="app-modal-panel onboarding-panel" role="dialog" aria-modal="true" aria-labelledby="onboardingTitle">
+    <div class="onboarding-eyebrow">Welcome</div>
+    <h2 id="onboardingTitle">Welcome to LLM Explorer</h2>
+    <p class="app-modal-message onboarding-lede">
+      Ask every model at once. Choose how you want to connect before you send your first prompt.
+    </p>
+
+    <div class="onboarding-choice-grid">
+      <button type="button" class="onboarding-choice" id="onboardingCloudChoice">
+        <span class="oc-icon" aria-hidden="true">☁️</span>
+        <span class="oc-badge">Recommended</span>
+        <span class="oc-title">Use Cloud API</span>
+        <span class="oc-desc">Add a DeepSeek API key for fast, reliable answers with no browser automation.</span>
+        <span class="oc-cta">Enter DeepSeek key →</span>
+      </button>
+
+      <button type="button" class="onboarding-choice" id="onboardingScrapeChoice">
+        <span class="oc-icon" aria-hidden="true">🌐</span>
+        <span class="oc-title">Use Free Web Scrapers</span>
+        <span class="oc-desc">Sign in to your favourite LLM websites once. Playwright reuses those sessions for free.</span>
+        <span class="oc-cta">Start Login Mode →</span>
+      </button>
+    </div>
+
+    <div class="onboarding-login-step" id="onboardingLoginStep" hidden>
+      <p>
+        Login windows are open. Sign in to each provider, then close the windows. Your sessions are
+        saved locally for future prompts.
+      </p>
+      <button type="button" class="primary" id="onboardingDoneBtn">I've finished logging in</button>
+    </div>
+
+    <div class="onboarding-actions">
+      <button type="button" class="onboarding-skip" id="onboardingSkip">Skip for now</button>
     </div>
   </div>
 </div>
@@ -2390,14 +2457,18 @@
 
   // Login Mode must be bound from script scope: `transport` is a const, so an
   // inline onclick="transport..." cannot see it (which made the button a no-op).
-  const loginBtn = document.getElementById('loginBtn');
-  if (loginBtn) {
-    loginBtn.onclick = () => {
-      if (!transport.startLoginMode) return;
-      const ids = CH.filter(ch => ch.checked && ch.kind === 'scrape').map(ch => ch.id);
-      transport.startLoginMode(ids);
-    };
+  function startScraperLoginMode() {
+    if (!transport.startLoginMode) {
+      alert('Login Mode is available in the Electron desktop app.');
+      return false;
+    }
+    const ids = CH.filter(ch => ch.checked && ch.kind === 'scrape').map(ch => ch.id);
+    transport.startLoginMode(ids);
+    return true;
   }
+
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) loginBtn.onclick = startScraperLoginMode;
 
   // --- ELECTRON APP INTEGRATION ---
 
@@ -2409,29 +2480,84 @@
   };
 
   const settingsBtn = document.getElementById('settingsBtn');
-  if (settingsBtn) {
-    settingsBtn.onclick = async () => {
-      if (!transport.hasKey || !transport.setKey) {
-        alert('Settings are available in the Electron desktop app.'); return;
-      }
-      let configured = false;
-      try { configured = await transport.hasKey('deepseek'); } catch {}
 
-      const message = configured
-        ? 'A DeepSeek API key is already configured. Enter a new key to replace it.'
-        : 'Enter your DeepSeek API key. It is encrypted by the operating system and never stored in the page.';
-      const values = await showAppModal({
-        title: 'DeepSeek API Key', message, confirmLabel: 'Save',
-        fields: [{ name: 'key', label: 'API key', type: 'password', placeholder: 'sk-...', required: true }]
-      });
-      if (!values) return;
-      try {
-        const result = await transport.setKey('deepseek', values.key.trim());
-        if (result?.ok) alert('DeepSeek API key saved securely.');
-        else alert(result?.error || 'Could not save the DeepSeek API key.');
-      } catch (error) { alert(`Could not save the DeepSeek API key: ${error.message}`); }
+  // Opens the DeepSeek key dialog. Resolves true only when the key was saved,
+  // so the onboarding wizard can tell "saved" apart from "cancelled".
+  async function openDeepSeekSettings({ silentSuccess = false } = {}) {
+    if (!transport.hasKey || !transport.setKey) {
+      alert('Settings are available in the Electron desktop app.');
+      return false;
+    }
+    let configured = false;
+    try { configured = await transport.hasKey('deepseek'); } catch {}
+
+    const message = configured
+      ? 'A DeepSeek API key is already configured. Enter a new key to replace it.'
+      : 'Enter your DeepSeek API key. It is encrypted by the operating system and never stored in the page.';
+    const values = await showAppModal({
+      title: 'DeepSeek API Key', message, confirmLabel: 'Save',
+      fields: [{ name: 'key', label: 'API key', type: 'password', placeholder: 'sk-...', required: true }]
+    });
+    if (!values) return false;
+    try {
+      const result = await transport.setKey('deepseek', values.key.trim());
+      if (result?.ok) {
+        if (!silentSuccess) alert('DeepSeek API key saved securely.');
+        return true;
+      }
+      alert(result?.error || 'Could not save the DeepSeek API key.');
+    } catch (error) { alert(`Could not save the DeepSeek API key: ${error.message}`); }
+    return false;
+  }
+
+  if (settingsBtn) settingsBtn.onclick = () => { openDeepSeekSettings(); };
+
+  // --- ONBOARDING WIZARD --------------------------------------------------
+  const ONBOARDED_KEY = 'llmx.onboarded';
+  const onboardingModal = document.getElementById('onboardingModal');
+  const onboardingCloudChoice = document.getElementById('onboardingCloudChoice');
+  const onboardingScrapeChoice = document.getElementById('onboardingScrapeChoice');
+  const onboardingLoginStep = document.getElementById('onboardingLoginStep');
+  const onboardingDoneBtn = document.getElementById('onboardingDoneBtn');
+  const onboardingSkip = document.getElementById('onboardingSkip');
+
+  function finishOnboarding() {
+    try { localStorage.setItem(ONBOARDED_KEY, 'true'); } catch {}
+    if (onboardingModal) onboardingModal.hidden = true;
+  }
+
+  function showOnboarding() {
+    if (!onboardingModal) return;
+    onboardingModal.hidden = false;
+    if (onboardingCloudChoice) onboardingCloudChoice.focus();
+  }
+
+  if (onboardingCloudChoice) {
+    onboardingCloudChoice.onclick = async () => {
+      // Both are fixed overlays; hide onboarding while the key dialog is open.
+      onboardingModal.hidden = true;
+      const saved = await openDeepSeekSettings({ silentSuccess: true });
+      if (saved) finishOnboarding();
+      else showOnboarding();
     };
   }
+
+  if (onboardingScrapeChoice) {
+    onboardingScrapeChoice.onclick = () => {
+      // startScraperLoginMode starts Playwright and returns false outside Electron.
+      if (!startScraperLoginMode()) return;
+      if (onboardingLoginStep) onboardingLoginStep.hidden = false;
+      if (onboardingDoneBtn) onboardingDoneBtn.focus();
+    };
+  }
+
+  if (onboardingDoneBtn) onboardingDoneBtn.onclick = finishOnboarding;
+  if (onboardingSkip) onboardingSkip.onclick = finishOnboarding;
+
+  // First run only. A missing key (null) means the user has not chosen yet.
+  let hasOnboarded = true;
+  try { hasOnboarded = localStorage.getItem(ONBOARDED_KEY) === 'true'; } catch { hasOnboarded = false; }
+  if (!hasOnboarded) showOnboarding();
 
   // --- ENGINE SELECTION ---------------------------------------------------
   const masterTextEl = document.getElementById('masterText');
