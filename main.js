@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, safeStorage } = require('electron');
+const { app, BrowserWindow, ipcMain, safeStorage, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -32,6 +32,15 @@ function sendStream(event, turnId, chunk) {
 
 function sendComplete(event, turnId) {
   event.reply('hybrid-complete', { turnId });
+}
+
+// The renderer turns this into the "Local Engine Offline" troubleshooting
+// modal instead of failing silently when OVMS cannot be reached.
+function sendEngineError(event, turnId, message) {
+  event.reply('engine-error', {
+    turnId,
+    message: message || 'The local OVMS engine is offline.'
+  });
 }
 
 // --- PROVIDER REGISTRY -----------------------------------------------------
@@ -351,8 +360,9 @@ function runSynthesizer(responses, event, turnId) {
   }
 
   if (!fs.existsSync(PYTHON_EXE) || !fs.existsSync(PYTHON_SCRIPT_PATH)) {
-    sendStream(event, turnId,
-      '\n[Local GPU synthesis is unavailable: Python or synthesize.py was not found. Switch the engine to Cloud API.]\n');
+    const message = 'Local GPU synthesis is unavailable: Python or synthesize.py was not found.';
+    sendStream(event, turnId, `\n[${message} Switch the engine to Cloud API.]\n`);
+    sendEngineError(event, turnId, message);
     sendComplete(event, turnId);
     return;
   }
@@ -383,6 +393,7 @@ function runSynthesizer(responses, event, turnId) {
 
   pyProcess.on('error', (error) => {
     console.error('Python failed to start:', error.message);
+    sendEngineError(event, turnId, `Local synthesis failed to start: ${error.message}`);
     finish(`\n[Local synthesis failed to start: ${error.message}]\n`);
   });
 
@@ -396,9 +407,21 @@ function runSynthesizer(responses, event, turnId) {
   pyProcess.stdout.on('data', (data) => {
     if (!finished) sendStream(event, turnId, data);
   });
-  pyProcess.stderr.on('data', (data) => console.error(`Python Error: ${data}`));
+
+  // OVMS runs as a separate server, so a refused/lost connection surfaces on
+  // stderr. Keep the tail so the modal can show the real reason.
+  let stderrTail = '';
+  pyProcess.stderr.on('data', (data) => {
+    const text = data.toString();
+    stderrTail = (stderrTail + text).slice(-2000);
+    console.error(`Python Error: ${text}`);
+  });
 
   pyProcess.on('close', (code) => {
+    if (code && /connection|refused|econn|10061|timed out|timeout|offline|unreachable|failed to connect/i.test(stderrTail)) {
+      const detail = stderrTail.trim().split(/\r?\n/).filter(Boolean).pop() || 'connection refused';
+      sendEngineError(event, turnId, `The local OVMS engine could not be reached: ${detail}`);
+    }
     finish(code ? `\n[Local synthesis exited with code ${code}.]\n` : null);
   });
 }
@@ -708,7 +731,16 @@ app.whenReady().then(() => {
       .filter(r => r.status === 'fulfilled' && r.value && r.value.text && r.value.status !== 'error')
       .map(r => r.value.text);
 
-    runSynthesis(textResponses, event, engine, turnId);
+    // A connection error thrown by the local engine must surface as a modal,
+    // not as a silently stalled turn.
+    try {
+      runSynthesis(textResponses, event, engine, turnId);
+    } catch (error) {
+      console.error('Synthesis failed:', error.message);
+      sendStream(event, turnId, `\n[Synthesis failed: ${error.message}]\n`);
+      sendEngineError(event, turnId, error.message);
+      sendComplete(event, turnId);
+    }
   });
 
   // 2. Provider registry. User entries live in userData/providers.json.
@@ -755,7 +787,40 @@ app.whenReady().then(() => {
     }
   });
 
-  // 4. Handle Login Mode
+  // 4. Export the current turn as Markdown. The renderer sends the already
+  // formatted text; main only owns the native save dialog and disk write.
+  ipcMain.handle('export-conversation', async (event, text) => {
+    const content = typeof text === 'string' ? text : '';
+    if (!content.trim()) {
+      return { ok: false, canceled: false, error: 'There is nothing to export.' };
+    }
+
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const options = {
+      title: 'Export conversation',
+      defaultPath: path.join(app.getPath('documents'), `llm-explorer-${stamp}.md`),
+      filters: [{ name: 'Markdown', extensions: ['md'] }]
+    };
+
+    try {
+      const owner = BrowserWindow.fromWebContents(event.sender);
+      const result = owner
+        ? await dialog.showSaveDialog(owner, options)
+        : await dialog.showSaveDialog(options);
+
+      if (result.canceled || !result.filePath) {
+        return { ok: false, canceled: true };
+      }
+
+      fs.writeFileSync(result.filePath, content, 'utf8');
+      return { ok: true, canceled: false, filePath: result.filePath };
+    } catch (error) {
+      console.error('Could not export the conversation:', error.message);
+      return { ok: false, canceled: false, error: error.message };
+    }
+  });
+
+  // 5. Handle Login Mode
   ipcMain.on('login-mode', async (event) => {
     console.log("Starting Login Mode. Please log into the windows that open.");
     

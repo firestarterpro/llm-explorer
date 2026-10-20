@@ -130,6 +130,9 @@
   
   .score-bar { padding: 8px 12px; font-size: 12px; cursor: pointer; background: rgba(255,255,255,0.05); border-top: 1px solid var(--border); display: flex; gap: 8px; margin-top: 12px; border-radius: 6px; }
   .source-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .source-bar .spacer { flex: 1; }
+  .source-bar .bar-act { background: transparent; border: 1px solid var(--border); color: var(--text-muted); cursor: pointer; padding: 5px 10px; font-size: 12px; border-radius: 5px; font-family: inherit; transition: 0.2s; }
+  .source-bar .bar-act:hover { color: var(--text); border-color: var(--accent); background: rgba(110, 168, 254, 0.08); }
   .src-emoji { background: rgba(0,0,0,0.5); border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; cursor: pointer; color: white; }
   .src-emoji.omitted { opacity: 0.4; }
   .src-reply { display: none; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 8px; margin-top: 8px; font-size: 13px; }
@@ -145,6 +148,8 @@
     .toolbar button { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text); padding: 12px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; flex: 1; display: flex; justify-content: center; align-items: center; gap: 6px; transition: 0.2s; }
   .toolbar button:hover { background: rgba(255,255,255,0.1); }
   .toolbar button.primary { background: rgba(0, 240, 255, 0.1); border-color: var(--accent); color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); flex: 2; }
+  .toolbar select.engine-select { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; outline: none; transition: 0.2s; }
+  .toolbar select.engine-select:hover, .toolbar select.engine-select:focus { border-color: var(--accent); color: var(--accent); }
 
   .history { padding: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 8px; }
   .hs-row input[type="range"] { width: 100%; accent-color: var(--accent); }
@@ -213,6 +218,14 @@
   .app-modal-actions button { flex: 1; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; }
   .app-modal-actions button.primary { background: var(--accent); color: #000; }
   .app-modal-actions button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
+
+  /* LOCAL ENGINE TROUBLESHOOTING MODAL */
+  #troubleshootModal .app-modal-panel { border-color: var(--accent-2); box-shadow: 0 0 48px rgba(255, 0, 85, 0.18); }
+  #troubleshootModal .app-modal-message strong { color: var(--text); }
+  .troubleshoot-code { position: relative; background: #05070a; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 8px; padding: 14px 16px; margin-bottom: 20px; overflow-x: auto; }
+  .troubleshoot-code code { display: block; font-family: 'Cascadia Code', Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.7; color: var(--accent); white-space: pre; }
+  .troubleshoot-hint { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
+  #troubleshootModal .app-modal-actions button.secondary { border-color: var(--accent); color: var(--accent); }
 </style>
 </head>
 <body>
@@ -296,6 +309,10 @@
         <button class="toggle on" id="prefixToggleBtn">✨ Prefix</button>
         <button id="hybridBtn">🪟 Hybrid</button>
         <button class="toggle free" id="freeBtn">🆓 Free APIs</button>
+        <select class="engine-select" id="engineToggle" title="Synthesis engine" aria-label="Synthesis engine">
+          <option value="Local GPU" selected>⚡ Local GPU</option>
+          <option value="Cloud">☁️ DeepSeek API</option>
+        </select>
         <button class="primary send-btn" id="sendBtn">
           <span>Send ✈️</span>
           <span class="send-eta" id="sbTimer" style="font-size: 10px;">~0.0s</span>
@@ -341,6 +358,26 @@
     <div class="app-modal-actions">
       <button type="button" class="secondary" id="appModalCancel">Cancel</button>
       <button type="button" class="primary" id="appModalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Local Engine Troubleshooting -->
+<div class="app-modal" id="troubleshootModal" hidden>
+  <div class="app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="troubleshootTitle">
+    <h2 id="troubleshootTitle">⚠️ Local Engine Offline</h2>
+    <div class="app-modal-message">
+      <strong>Local GPU</strong> is selected, but the OVMS server is not answering.
+      Start it from the repository root in PowerShell, then retry.
+    </div>
+    <div class="troubleshoot-hint">Start OVMS</div>
+    <div class="troubleshoot-code">
+      <code>.\ovms\setupvars.ps1
+.\ovms\ovms.exe --rest_port 8000 --model_name local-llm --model_path C:\models\llm</code>
+    </div>
+    <div class="app-modal-actions">
+      <button type="button" class="secondary" id="troubleshootUseCloud">Use DeepSeek API</button>
+      <button type="button" class="primary" id="troubleshootRetry">Retry</button>
     </div>
   </div>
 </div>
@@ -1311,6 +1348,65 @@
   }
   function stripScore(raw) { return (raw || '').replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
 
+  function buildTurnMarkdown(turn) {
+    const lines = [
+      '# LLM Explorer Conversation',
+      '',
+      `_Exported ${new Date().toLocaleString()}_`,
+      '',
+      '## Prompt',
+      '',
+      turn.prompt || '',
+      ''
+    ];
+
+    const sources = (turn.order || [])
+      .map(id => ({ id, reply: replyOf(turn, id) }))
+      .filter(item => item.reply);
+
+    if (sources.length) {
+      lines.push('## Model Responses', '');
+      sources.forEach(({ id, reply }) => {
+        const ch = CH.find(c => c.id === id);
+        lines.push(`### ${ch ? `${ch.emoji} ${ch.name}` : id}`, '');
+        lines.push(stripScore(reply.text || '') || '_(no text)_', '');
+      });
+    }
+
+    if (turn.hybrid && turn.hybrid.text) {
+      lines.push('## Hybrid Synthesis', '', turn.hybrid.text, '');
+      if (turn.hybrid.reason) lines.push(`> ${turn.hybrid.reason}`, '');
+    }
+
+    return lines.join('\n');
+  }
+
+  async function exportTurn(turnId) {
+    const turn = convo.nodes[turnId];
+    if (!turn) return;
+
+    if (!window.api?.exportConversation) {
+      alert('Export is available in the Electron desktop app.');
+      return;
+    }
+
+    try {
+      const result = await window.api.exportConversation(buildTurnMarkdown(turn));
+      if (result?.canceled) return;
+
+      if (result?.ok) {
+        const name = String(result.filePath || 'conversation.md').split(/[\\/]/).pop();
+        const status = document.getElementById('sbStatus');
+        if (status) status.textContent = `Exported ${name}`;
+        return;
+      }
+
+      alert(result?.error || 'Could not export the conversation.');
+    } catch (error) {
+      alert(`Could not export the conversation: ${error.message}`);
+    }
+  }
+
   const turnEls = new Map();
   let convOrderKey = '';
 
@@ -1408,7 +1504,16 @@
       renderConv();
     };
 
-    sourceBar.append(spacer, sourcesBtn, allBtn);
+    const exportBtn = document.createElement('button');
+    exportBtn.className = 'bar-act';
+    exportBtn.dataset.act = 'export';
+    exportBtn.textContent = '📥 Export';
+    exportBtn.onclick = (e) => {
+      e.stopPropagation();
+      exportTurn(turnId);
+    };
+
+    sourceBar.append(spacer, sourcesBtn, exportBtn, allBtn);
     el.append(label, body, scoreBar, sourceBar);
 
     return { el, turnId, mode: 'hybrid', label, body, scoreBar, pct, reason, sourceBar, spacer, emojiEls: new Map(), emojiOrder: '', srcEls: new Map(), srcOrder: '' };
@@ -1769,6 +1874,7 @@
       ['🎯', 'Score Bar: Expand the Fidelity Clause rationale.'],
       ['🦁', 'Source Emoji: Inspect that individual raw model output.'],
       ['⊞ View Sources', 'Opens replies contributing to the synthesis.'],
+      ['📥 Export', 'Saves the current turn (prompt, sources, synthesis) as a Markdown file.'],
       ['⊞ Expand All', 'Expands/collapses all outputs for the current turn.']
     ]
   };
@@ -1846,6 +1952,44 @@
     };
   }
 
+  // --- ENGINE SELECTION ---------------------------------------------------
+  const masterTextEl = document.getElementById('masterText');
+  const engineToggle = document.getElementById('engineToggle');
+  const miniEngineToggle = document.getElementById('miniEngineToggle');
+  const ENGINE_PREF_KEY = 'llmx.engine.v1';
+  let lastPrompt = null;
+  let lastEngineErrorTurnId = null;
+
+  function setEngine(value) {
+    const engine = String(value || '').toLowerCase().includes('cloud') ? 'Cloud' : 'Local GPU';
+    if (engineToggle) engineToggle.value = engine;
+    if (miniEngineToggle) miniEngineToggle.value = engine;
+    try { localStorage.setItem(ENGINE_PREF_KEY, engine); } catch {}
+    return engine;
+  }
+
+  function currentEngine() {
+    return engineToggle?.value || miniEngineToggle?.value || 'Local GPU';
+  }
+
+  if (engineToggle) engineToggle.onchange = () => setEngine(engineToggle.value);
+  if (miniEngineToggle) miniEngineToggle.onchange = () => setEngine(miniEngineToggle.value);
+  try {
+    const savedEngine = localStorage.getItem(ENGINE_PREF_KEY);
+    if (savedEngine) setEngine(savedEngine);
+  } catch {}
+
+  function dispatchPrompt(promptText, activeModels, engine, parentId = convo.activeLeafId) {
+    const turnId = newTurnId();
+    addTurn(parentId, promptText, engine, activeModels, turnId);
+    renderAll(); updateTimer(); startSend();
+
+    if (window.api?.sendPrompt) {
+      window.api.sendPrompt({ turnId, promptText, activeModels, engine });
+    }
+    return turnId;
+  }
+
   function submitPrompt() {
     const promptText = masterTextEl.value.trim();
     if (!promptText) return;
@@ -1854,17 +1998,15 @@
     const activeModels = active.map(c => c.id);
     if (activeModels.length === 0) return alert("Select at least one model.");
 
-    const engine = document.getElementById('engineToggle')?.value || 'Local GPU';
-    const turnId = newTurnId();
-    addTurn(convo.activeLeafId, promptText, engine, activeModels, turnId);
+    lastPrompt = {
+      promptText,
+      activeModels: [...activeModels],
+      engine: setEngine(currentEngine())
+    };
+    dispatchPrompt(lastPrompt.promptText, lastPrompt.activeModels, lastPrompt.engine);
 
     masterTextEl.value = '';
     if (document.getElementById('miniText')) document.getElementById('miniText').value = '';
-    renderAll(); updateTimer(); startSend();
-
-    if (window.api?.sendPrompt) {
-      window.api.sendPrompt({ turnId, promptText, activeModels, engine });
-    }
   }
 
   document.getElementById('sendBtn').onclick = submitPrompt;
@@ -1873,6 +2015,62 @@
     document.getElementById('miniText').onkeydown = (e) => {
       if (e.key === 'Enter') { e.preventDefault(); submitPrompt(); }
     };
+  }
+
+  // --- LOCAL ENGINE TROUBLESHOOTING ---------------------------------------
+  const troubleshootModal = document.getElementById('troubleshootModal');
+  const troubleshootRetry = document.getElementById('troubleshootRetry');
+  const troubleshootUseCloud = document.getElementById('troubleshootUseCloud');
+
+  function closeTroubleshoot() {
+    if (troubleshootModal) troubleshootModal.hidden = true;
+  }
+
+  if (troubleshootModal) {
+    troubleshootModal.onclick = (event) => {
+      if (event.target === troubleshootModal) closeTroubleshoot();
+    };
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && !troubleshootModal.hidden) closeTroubleshoot();
+    });
+  }
+
+  if (troubleshootRetry) {
+    troubleshootRetry.onclick = () => {
+      closeTroubleshoot();
+      if (!lastPrompt) return;
+      const failed = convo.nodes[lastEngineErrorTurnId];
+      const parentId = failed ? failed.parentId : convo.activeLeafId;
+      setEngine('Local GPU');
+      dispatchPrompt(lastPrompt.promptText, lastPrompt.activeModels, 'Local GPU', parentId);
+    };
+  }
+
+  if (troubleshootUseCloud) {
+    troubleshootUseCloud.onclick = () => {
+      closeTroubleshoot();
+      setEngine('Cloud');
+      if (!lastPrompt) return;
+      const failed = convo.nodes[lastEngineErrorTurnId];
+      const parentId = failed ? failed.parentId : convo.activeLeafId;
+      dispatchPrompt(lastPrompt.promptText, lastPrompt.activeModels, 'Cloud', parentId);
+    };
+  }
+
+  if (window.api?.onEngineError) {
+    window.api.onEngineError(({ turnId, message } = {}) => {
+      lastEngineErrorTurnId = turnId || null;
+      const turn = turnId ? convo.nodes[turnId] : null;
+      if (turn) {
+        turn.hybrid.text = `⚠️ Local Engine Offline\n\n${message || 'The OVMS server is not responding.'}`;
+        turn.hybrid.status = 'error';
+        turn.hybrid.score = 0;
+        turn.hybrid.reason = 'Local engine offline — switch to DeepSeek API or start OVMS.';
+        turn.locked = true;
+        renderAll();
+      }
+      if (troubleshootModal) troubleshootModal.hidden = false;
+    });
   }
 
   if (window.api?.onReplyReceived) {
@@ -1897,7 +2095,8 @@
       const placeholder = turn.hybrid.text;
       if (placeholder === "Synthesizing..." || placeholder === "Waiting for LLMs...") turn.hybrid.text = "";
       turn.hybrid.text += chunk || '';
-      turn.hybrid.status = 'streaming';
+      // A late log line must not erase the offline state set by engine-error.
+      if (turn.hybrid.status !== 'error') turn.hybrid.status = 'streaming';
 
       const turnEl = turnEls.get(turnId);
       const hybridBody = turnEl ? turnEl.querySelector('.hybrid-body[data-kind="hybrid"]') : null;
@@ -1913,6 +2112,12 @@
     window.api.onHybridComplete((payload = {}) => {
       const turn = convo.nodes[payload.turnId];
       if (!turn) return;
+      // An engine error already owns this turn's final state.
+      if (turn.hybrid.status === 'error') {
+        turn.locked = true;
+        renderAll();
+        return;
+      }
       turn.hybrid.status = 'complete';
       turn.hybrid.score = 100;
       turn.hybrid.reason = "Synthesis Complete";

@@ -19,7 +19,11 @@ contextBridge.exposeInMainWorld('api', {
   getDeepSeekKeyStatus: () => ipcRenderer.invoke('settings:deepseek-status'),
   setDeepSeekKey: (key) => ipcRenderer.invoke('settings:set-deepseek-key', key),
 
+  // Save the current turn as Markdown via the main-process save dialog.
+  exportConversation: (text) => ipcRenderer.invoke('export-conversation', text),
+
   onReplyReceived: (callback) => ipcRenderer.on('reply-received', (event, data) => callback(data)),
   onHybridStream: (callback) => ipcRenderer.on('hybrid-stream', (event, payload) => callback(payload)),
-  onHybridComplete: (callback) => ipcRenderer.on('hybrid-complete', (event, payload) => callback(payload)) 
+  onHybridComplete: (callback) => ipcRenderer.on('hybrid-complete', (event, payload) => callback(payload)),
+  onEngineError: (callback) => ipcRenderer.on('engine-error', (event, payload) => callback(payload))
 });
