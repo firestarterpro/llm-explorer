@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:8000 https:; img-src 'self' data:;">
 <title>LLM Explorer</title>
+<script src="node_modules/animejs/dist/bundles/anime.umd.min.js"></script>
 <style>
   :root {
     --bg:#0f1115; --panel:#171a21; --panel-2:#1d2129; --border:#2a2f3a;
@@ -14,8 +16,11 @@
   html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
     font:18px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 
+  /* --sidebar-w is animated by Anime.js so the center column expands while the
+     left panel slides out. It falls back to the static 260px without JS. */
   .app { display:grid; height:100vh;
-    grid-template-columns: 260px 1fr;
+    --sidebar-w: 260px;
+    grid-template-columns: var(--sidebar-w) 1fr;
     grid-template-rows: auto 1fr auto;
     grid-template-areas: "top top" "left center" "bottom bottom"; }
 
@@ -23,6 +28,11 @@
   .topbar { grid-area: top; display:flex; align-items:flex-end; gap:8px;
     padding:6px 10px 0; border-bottom:1px solid var(--border); background:var(--panel);
     position:relative; }
+  .sidebar-toggle { background:transparent; border:1px solid var(--border);
+    border-radius:6px; color:var(--text); padding:6px 10px; margin-bottom:4px;
+    font:inherit; font-size:18px; line-height:1; cursor:pointer; flex-shrink:0; }
+  .sidebar-toggle:hover { border-color:var(--accent); }
+  .sidebar-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
 
   .tabs { display:flex; gap:3px; flex:1; overflow-x:auto; }
   .tab { padding:8px 14px; border:1px solid transparent; border-bottom:none;
@@ -59,7 +69,12 @@
   /* ---- Left ---- */
   .leftbar { grid-area: left; border-right:1px solid var(--border);
     background:var(--panel); padding:12px; overflow-y:auto;
-    display:flex; flex-direction:column; gap:12px; }
+    display:flex; flex-direction:column; gap:12px;
+    /* Keep the panel 260px wide while the grid track collapses, so -100% moves
+       it fully off-screen instead of shrinking with the track mid-animation. */
+    width:260px; will-change:transform; }
+  /* Set only after the slide-out finishes, so the panel stops taking focus. */
+  .leftbar.collapsed { visibility:hidden; pointer-events:none; }
   .lb-section { font-size:13px; letter-spacing:.1em; text-transform:uppercase;
     color:var(--muted); padding:2px 0; font-weight:600; }
   .master-slider { background:var(--panel-2); border:1px solid var(--border);
@@ -129,6 +144,15 @@
   }
   .llm-row.heat-row:hover {
     border-color: rgba(var(--heat-rgb, 74, 158, 255), 1);
+  }
+
+  /* Max heat: declared after the heat rules so the red glow wins. Anime.js
+     pulses borderColor between red and yellow while this class is present. */
+  .llm-row.maxed {
+    border-color: var(--red);
+    box-shadow:
+      0 0 16px rgba(248, 81, 73, .65),
+      inset 0 0 8px rgba(248, 81, 73, .28);
   }
 
   /* Drag feedback is declared after the heat rules so it wins the cascade:
@@ -358,6 +382,8 @@
 
 <div class="app">
   <div class="topbar">
+    <button class="sidebar-toggle" id="sidebarToggle" type="button"
+      aria-label="Hide sidebar" aria-expanded="true" title="Hide sidebar">☰</button>
     <div class="tabs" id="tabs"></div>
     <button id="loginBtn" onclick="window.api?.startLoginMode?.()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 15px; cursor: pointer;">🔐 Login Mode</button>
     <button id="newChatBtn" onclick="clearChat()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 15px; cursor: pointer;">🗑️ New Chat</button>
@@ -921,6 +947,35 @@
     row.style.setProperty('--heat-glow', (Math.max(0, (t - 0.7) / 0.3) * 18).toFixed(1));
   }
 
+  // --- MAX HEAT PULSE (Anime.js) ---
+  // `.maxed` is the CSS equivalent of selecting `.llm-row.maxed`. Each row keeps
+  // its own animation so keyed re-renders and reordering never restart or leak it.
+  const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+
+  function stopMaxPulse(row) {
+    if (!row._maxPulse) return;
+    row._maxPulse.revert();
+    row._maxPulse = null;
+    row.style.borderColor = '';
+  }
+
+  function syncMaxHeat(row, atMax) {
+    row.classList.toggle('maxed', !!atMax);
+    if (!atMax) {
+      stopMaxPulse(row);
+      return;
+    }
+    if (row._maxPulse || reduceMotionQuery.matches) return;
+    if (!window.anime?.animate) return;
+    row._maxPulse = anime.animate(row, {
+      borderColor: ['#f85149', '#f0b429'],
+      duration: 650,
+      loop: true,
+      alternate: true,
+      ease: 'inOutSine'
+    });
+  }
+
   // --- STATE FOR LOCKS & MASTER SLIDER ---
   const masterSlider = document.getElementById('masterSlider');
   const masterDelta = document.getElementById('masterDelta');
@@ -1059,6 +1114,9 @@
     if (ch.isStatic) return;
 
     applyHeat(row, ch.value);
+    // Keep the pulse in sync after master-slider moves, refreshes, and reorders.
+    // The per-row slider writes ch.value; maxTokens is the provider budget.
+    syncMaxHeat(row, ch.value === 100 || ch.maxTokens === 100);
 
     const badge = row.querySelector('.model-badge');
     if (badge) {
@@ -1122,6 +1180,9 @@
         ch.value = parseInt(slider.value, 10);
         commitMasterBaseline();
         applyHeat(row, ch.value);
+        // Max heat: the slider caps at 100. (maxTokens is the static provider
+        // budget and stays 1000 for most providers, so ch.value drives the pulse.)
+        syncMaxHeat(row, ch.maxTokens === 100 || ch.value === 100);
         saveUiPrefs();
         updateHistory();
         updateTimer();
@@ -2066,6 +2127,60 @@
     renderTabs();
     renderConv();
   }
+
+  // --- COLLAPSIBLE SIDEBAR (Anime.js) ---
+  const appEl = document.querySelector('.app');
+  const leftbarEl = document.querySelector('.leftbar');
+  const sidebarToggle = document.getElementById('sidebarToggle');
+  const SIDEBAR_WIDTH = 260;
+  let sidebarCollapsed = false;
+  let sidebarAnims = [];
+
+  function setSidebarCollapsed(collapsed) {
+    if (collapsed === sidebarCollapsed) return;
+    sidebarCollapsed = collapsed;
+
+    // A fast double-click must not leave two competing tweens on the panel.
+    sidebarAnims.forEach(anim => anim.cancel());
+    sidebarAnims = [];
+
+    if (!collapsed) leftbarEl.classList.remove('collapsed');
+    sidebarToggle.setAttribute('aria-expanded', String(!collapsed));
+    const label = collapsed ? 'Show sidebar' : 'Hide sidebar';
+    sidebarToggle.setAttribute('aria-label', label);
+    sidebarToggle.title = label;
+
+    const gridWidth = collapsed ? '0px' : `${SIDEBAR_WIDTH}px`;
+    const canAnimate = window.anime?.animate && !reduceMotionQuery.matches;
+
+    if (!canAnimate) {
+      // Graceful fallback: commit both states without motion.
+      appEl.style.setProperty('--sidebar-w', gridWidth);
+      leftbarEl.style.transform = collapsed ? 'translateX(-100%)' : 'translateX(0%)';
+      leftbarEl.classList.toggle('collapsed', collapsed);
+      return;
+    }
+
+    // Animating --sidebar-w expands the center grid track in lockstep with the
+    // panel's translateX, so there is no empty gutter left behind.
+    const duration = 320;
+    const ease = 'inOutQuad';
+    sidebarAnims.push(anime.animate(appEl, {
+      '--sidebar-w': gridWidth,
+      duration,
+      ease
+    }));
+    sidebarAnims.push(anime.animate(leftbarEl, {
+      translateX: collapsed ? '-100%' : '0%',
+      duration,
+      ease,
+      onComplete: () => {
+        leftbarEl.classList.toggle('collapsed', sidebarCollapsed);
+      }
+    }));
+  }
+
+  sidebarToggle.onclick = () => setSidebarCollapsed(!sidebarCollapsed);
 
   // --- INITIALIZE UI ---
   syncMasterUI();
