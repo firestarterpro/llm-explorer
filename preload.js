@@ -31,8 +31,17 @@ contextBridge.exposeInMainWorld('api', {
   // Save the current turn as Markdown via the main-process save dialog.
   exportConversation: (text) => ipcRenderer.invoke('export-conversation', text),
 
+  // Non-secret app preferences (e.g. showBrowsers), whitelisted in main.
+  getAppPrefs: () => ipcRenderer.invoke('prefs:get'),
+  setAppPref: (name, value) => ipcRenderer.invoke('prefs:set', name, value),
+
+  // Restart the app (Settings > Reset Onboarding).
+  relaunchApp: () => ipcRenderer.invoke('app:relaunch'),
+
   onReplyReceived: (callback) => ipcRenderer.on('reply-received', (event, data) => callback(data)),
   onHybridStream: (callback) => ipcRenderer.on('hybrid-stream', (event, payload) => callback(payload)),
+  // Status and provider-error lines, kept apart from the synthesized answer.
+  onHybridLog: (callback) => ipcRenderer.on('hybrid-log', (event, payload) => callback(payload)),
   onHybridComplete: (callback) => ipcRenderer.on('hybrid-complete', (event, payload) => callback(payload)),
   onEngineError: (callback) => ipcRenderer.on('engine-error', (event, payload) => callback(payload))
 });

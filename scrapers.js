@@ -26,6 +26,14 @@ function getProfileDir(name) {
   return path.join(root, `user_data_${name}`);
 }
 
+// Scrapes run in a real (headed) browser parked off-screen, so windows never
+// pop up over the app. Login Mode and the "Show browsers during scraping"
+// setting put the window on-screen explicitly: without a position, Chromium
+// restores the profile's last window position, which after a hidden scrape is
+// off-screen too.
+const OFFSCREEN_WINDOW_ARGS = ['--window-position=-32000,-32000'];
+const ONSCREEN_WINDOW_ARGS = ['--window-position=80,60'];
+
 // Every persistent context launched here is tracked so quit can close them
 // deterministically. Playwright only cleans up after a normal process exit; if
 // the app is force-closed, chrome.exe would otherwise keep running.
@@ -50,23 +58,27 @@ async function closeAll() {
 
 // The single Playwright entry point for the app. Scraping and Login Mode must
 // launch with identical options, otherwise the same profile is opened by two
-// different browser configurations and the saved session stops matching.
-// opts: { headless?, viewport? }.
+// different browser configurations and the saved session stops matching. The
+// window position is the one exception: it is not part of the session.
+// opts: { headless?, viewport?, visible? }.
 async function launchContext(id, opts = {}) {
   const userDataDir = getProfileDir(id);
   fs.mkdirSync(userDataDir, { recursive: true });
 
+  const headless = opts.headless === true;
+  const windowArgs = headless ? [] : (opts.visible ? ONSCREEN_WINDOW_ARGS : OFFSCREEN_WINDOW_ARGS);
+
   const context = await chromium.launchPersistentContext(userDataDir, {
-    headless: opts.headless === true,
+    headless,
     // scripts/install-browsers.js installs with --no-shell, so only the full
     // Chromium build ships. Playwright would otherwise look for the separate
     // chrome-headless-shell binary when headless is requested.
-    ...(opts.headless === true ? { channel: 'chromium' } : {}),
+    ...(headless ? { channel: 'chromium' } : {}),
     viewport: opts.viewport || { width: 1280, height: 800 },
     // --no-sandbox and a hard-coded Chrome/120 user agent were both removed:
     // they weakened the browser sandbox and made the browser fingerprint
     // inconsistent between Login Mode and scraping.
-    args: ['--disable-blink-features=AutomationControlled']
+    args: ['--disable-blink-features=AutomationControlled', ...windowArgs]
   });
   return trackContext(context);
 }
@@ -77,21 +89,49 @@ const DEFAULT_RESPONSE_TIMEOUT_MS = 180000;
 const NEW_RESPONSE_POLL_MS = 500;
 const STABLE_POLL_MS = 1000;
 const STABLE_SECONDS = 3;
+// A visible window gives a person time to clear a CAPTCHA. A hidden one fails
+// fast and points the user at Login Mode instead.
+const INPUT_WAIT_HIDDEN_MS = 15000;
+const INPUT_WAIT_VISIBLE_MS = 60000;
 
+// Forced Text Box Output: every scraper asks for one plain-text code block,
+// which the `pre, code` response selector picks up without page chrome or
+// markdown. A provider whose site misreads the instruction sets
+// forceTextBox: false (Google AI Mode searches for the instruction instead of
+// answering it).
+const TEXT_BOX_INSTRUCTION = '\n\nCRITICAL INSTRUCTION: Wrap your entire response inside a single markdown code block (```text ... ```). Do NOT use any markdown formatting (no bolding, no headers, no fluff). Output plain text only. Do not write anything outside of the code block.';
+
+// Shown on the card when a page never offered its input box or never answered.
+// In practice that is a login wall or a CAPTCHA, not a slow model.
+const TIMEOUT_REMINDER = "Browser timed out. Please click 'Login Mode' to ensure you are logged in and solve any CAPTCHAs.";
+
+// Removes code-fence markers, and the language label some sites render inside
+// <pre>, so only the plain answer text remains.
 function cleanResponseText(text) {
   return String(text || '')
-    .replace(/^```[a-z]*\n/i, '')
-    .replace(/\n```$/i, '');
+    .replace(/^[ \t]*```[\w-]*[ \t]*$/gm, '')
+    .replace(/^\s*```[\w-]*[ \t]*/, '')
+    .replace(/[ \t]*```\s*$/, '')
+    .replace(/^\s*(?:text|plaintext)[ \t]*\r?\n/i, '')
+    .trim();
+}
+
+// Playwright errors end with a multi-line call log; the first line says enough.
+function firstLine(message) {
+  return String(message || '').split(/\r?\n/).map(part => part.trim()).find(Boolean) || 'Unknown error';
 }
 
 // A generic scraper factory to handle the repetitive Playwright logic.
 // It returns { id, status, text, ms } and never touches IPC; main.js owns the
-// dispatcher and turns this result into reply-received / hybrid-stream events.
-async function genericScrape(config, promptText) {
+// dispatcher and turns this result into reply-received / hybrid-log events.
+// opts: { showBrowser? } from the Settings debug toggle.
+async function genericScrape(config, promptText, opts = {}) {
   const startedAt = Date.now();
+  const visible = opts.showBrowser === true;
+  const timedOut = () => ({ id: config.id, status: 'error', text: TIMEOUT_REMINDER, ms: Date.now() - startedAt });
   let context;
   try {
-    context = await launchContext(config.id);
+    context = await launchContext(config.id, { visible });
     const page = context.pages()[0] || await context.newPage();
     console.log(`Navigating to ${config.name}...`);
     await page.goto(config.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -99,7 +139,7 @@ async function genericScrape(config, promptText) {
 
     // 1. Find the input box
     const input = page.locator(config.inputSelector).first();
-    await input.waitFor({ timeout: 15000 });
+    await input.waitFor({ timeout: visible ? INPUT_WAIT_VISIBLE_MS : INPUT_WAIT_HIDDEN_MS });
 
     // 2. Snapshot the response list before submitting, so an old reply can
     // never be mistaken for the new one.
@@ -111,7 +151,8 @@ async function genericScrape(config, promptText) {
       : DEFAULT_RESPONSE_TIMEOUT_MS;
 
     // 3. Type and Submit
-    await input.fill(promptText);
+    const fullPrompt = config.forceTextBox === false ? promptText : promptText + TEXT_BOX_INSTRUCTION;
+    await input.fill(fullPrompt);
     await page.waitForTimeout(500);
 
     if (config.submitAction === 'enter') {
@@ -138,9 +179,7 @@ async function genericScrape(config, promptText) {
     if (!newResponseAppeared) {
       const seconds = Math.round(responseTimeoutMs / 1000);
       console.warn(`${config.name}: timed out after ${seconds}s waiting for a new response element.`);
-      // Empty text means no usable reply was scraped. main.js turns this into
-      // the user-facing timeout message and keeps it out of synthesis.
-      return { id: config.id, status: 'partial', text: '', ms: Date.now() - startedAt };
+      return timedOut();
     }
 
     // 5. A reply is complete when its text is unchanged for three consecutive
@@ -181,6 +220,7 @@ async function genericScrape(config, promptText) {
     if (status === 'partial') {
       const seconds = Math.round(responseTimeoutMs / 1000);
       console.warn(`${config.name}: timed out after ${seconds}s; returning partial text.`);
+      if (!cleanText) return timedOut();
     }
 
     return {
@@ -191,11 +231,16 @@ async function genericScrape(config, promptText) {
     };
 
   } catch (error) {
+    // page.goto / waitFor timeouts: the page never offered its input box.
+    if (error && error.name === 'TimeoutError') {
+      console.warn(`${config.name}: ${firstLine(error.message)}`);
+      return timedOut();
+    }
     console.error(`${config.name} error:`, error.message);
     return {
       id: config.id,
       status: 'error',
-      text: `Error: ${error.message}`,
+      text: `Error: ${firstLine(error.message)}`,
       ms: Date.now() - startedAt
     };
   } finally {
@@ -207,7 +252,7 @@ async function genericScrape(config, promptText) {
 // Provider configs live in providers.json (built-ins) and userData/providers.json
 // (user-added), loaded by main.js. This module only knows how to run a config.
 module.exports = {
-  scrape: (config, prompt) => genericScrape(config, prompt),
+  scrape: (config, prompt, opts) => genericScrape(config, prompt, opts),
   launchContext,
   getProfileDir,
   closeAll

@@ -3,5 +3,6 @@ user_data*
 pw-browsers/
 dist/
 build/
-*.logovms.zip
+*.log
+ovms.zip
 ovms/

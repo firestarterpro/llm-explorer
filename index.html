@@ -170,6 +170,15 @@
   .toolbar button.primary { background: rgba(0, 240, 255, 0.1); border-color: var(--accent); color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); flex: 2; }
   .toolbar select.engine-select { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 8px; font-size: 12px; font-weight: 600; cursor: pointer; outline: none; transition: 0.2s; }
   .toolbar select.engine-select:hover, .toolbar select.engine-select:focus { border-color: var(--accent); color: var(--accent); }
+  /* Retry and Sync have no behaviour yet. display:flex above would otherwise
+     override the hidden attribute. */
+  .toolbar button[hidden] { display: none; }
+
+  /* 🛃 Fidelity Clause toggle on each model row */
+  .fidelity-btn { opacity: 0.35; filter: grayscale(1); transition: opacity 0.2s, filter 0.2s; }
+  .fidelity-btn:hover { opacity: 0.8; }
+  .fidelity-btn.on { opacity: 1; filter: none; }
+  .fidelity-btn[hidden] { display: none; }
 
   .history { padding: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 8px; }
   .hs-row input[type="range"] { width: 100%; accent-color: var(--accent); }
@@ -228,7 +237,9 @@
   /* MODALS */
   .app-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); padding: 20px; }
   .app-modal[hidden] { display: none; }
-  .app-modal-panel { width: min(520px, 100%); background: var(--panel-glass); border: 1px solid var(--accent-2); border-radius: 16px; padding: 32px; }
+  /* Panels scroll inside the window, so a tall dialog (Settings, onboarding on
+     a small laptop screen) never pushes its buttons off-screen. */
+  .app-modal-panel { width: min(520px, 100%); max-height: calc(100vh - 40px); overflow-y: auto; background: var(--panel-glass); border: 1px solid var(--accent-2); border-radius: 16px; padding: 32px; }
   .app-modal-panel h2 { margin-bottom: 12px; color: var(--accent-2); }
   .app-modal-message { color: var(--text-muted); margin-bottom: 24px; }
   .app-modal-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
@@ -277,6 +288,10 @@
   .settings-danger h3 { color: var(--accent-2); }
   .settings-danger button { margin-top: 12px; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--accent-2); background: transparent; color: var(--accent-2); font: inherit; font-weight: 700; cursor: pointer; }
   .settings-danger button:hover { background: rgba(255,0,85,0.1); }
+  .settings-toggle { display: flex; align-items: flex-start; gap: 10px; font-size: 14px; cursor: pointer; margin-bottom: 8px; }
+  .settings-toggle input { accent-color: var(--accent); width: 16px; height: 16px; margin-top: 2px; flex: 0 0 auto; cursor: pointer; }
+  .settings-action { margin-top: 12px; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--accent); background: transparent; color: var(--accent); font: inherit; font-weight: 700; cursor: pointer; }
+  .settings-action:hover { background: rgba(0,240,255,0.1); }
   .settings-status { margin-top: 10px; font-size: 12px; color: var(--accent); }
   .settings-status[hidden] { display: none; }
   .settings-empty { color: var(--text-muted); font-size: 13px; }
@@ -406,8 +421,8 @@
       <textarea id="masterText" placeholder="Type your prompt here..."></textarea>
       
       <div class="toolbar">
-        <button id="retryBtn">🔄 Retry</button>
-        <button id="syncBtn">Sync</button>
+        <button id="retryBtn" hidden>🔄 Retry</button>
+        <button id="syncBtn" hidden>Sync</button>
         <button class="toggle on" id="prefixToggleBtn">✨ Prefix</button>
         <button id="hybridBtn">🪟 Hybrid</button>
         <button class="toggle free" id="freeBtn">🆓 Free APIs</button>
@@ -490,31 +505,32 @@
     <div class="onboarding-eyebrow">Welcome</div>
     <h2 id="onboardingTitle">Welcome to LLM Explorer</h2>
     <p class="app-modal-message onboarding-lede">
-      LLM Explorer needs two parts working together. <strong>DeepSeek is the synthesis engine (the brain).</strong>
-      <strong>Brave and Google are the data scrapers (the eyes).</strong> You need both — the scrapers fetch the
-      raw answers, and DeepSeek merges them into one final response.
+      One DeepSeek API key runs the whole pipeline. <strong>DeepSeek Search finds fresh web sources</strong>
+      with no browser and no CAPTCHAs, <strong>Brave answers in a hidden browser window</strong>, and
+      <strong>DeepSeek merges everything into one final response</strong>. Google AI, Gemini and other sites
+      are optional extras you can tick in the left panel.
     </p>
 
     <div class="onboarding-choice-grid">
       <button type="button" class="onboarding-choice" id="onboardingCloudChoice">
         <span class="oc-icon" aria-hidden="true">🧠</span>
         <span class="oc-badge">Required</span>
-        <span class="oc-title">Add the DeepSeek key (the brain)</span>
-        <span class="oc-desc">The synthesis engine. DeepSeek reads every scraped answer and writes the single final response.</span>
+        <span class="oc-title">Add your DeepSeek API key</span>
+        <span class="oc-desc">One key powers DeepSeek Search (finds the sources) and the DeepSeek synthesis (writes the answer).</span>
         <span class="oc-cta">Enter DeepSeek key →</span>
       </button>
 
       <button type="button" class="onboarding-choice" id="onboardingScrapeChoice">
         <span class="oc-icon" aria-hidden="true">👀</span>
-        <span class="oc-title">Sources are ready (the eyes)</span>
-        <span class="oc-desc">Brave and Google need no login. Use Login Mode only if you add an account-only site later.</span>
+        <span class="oc-title">Sources are ready</span>
+        <span class="oc-desc">DeepSeek Search and Brave are on by default and need no login. Use Login Mode for account sites (Gemini, ChatGPT…) or if a site asks for a CAPTCHA.</span>
         <span class="oc-cta">Start Login Mode →</span>
       </button>
     </div>
 
     <div class="onboarding-login-step" id="onboardingLoginStep" hidden>
       <p>
-        Login windows are open. Sign in to each account-only provider you added, then close the windows.
+        Login windows are open. Sign in (or solve any CAPTCHA) in each one, then close the windows.
         Your sessions are saved locally for future prompts.
       </p>
       <button type="button" class="primary" id="onboardingDoneBtn">I've finished logging in</button>
@@ -555,6 +571,26 @@
       <div class="settings-key-list" id="settingsKeyList"></div>
     </div>
 
+    <div class="settings-section electron-only">
+      <h3>Scraping</h3>
+      <label class="settings-toggle">
+        <input type="checkbox" id="showBrowsersToggle">
+        <span>Show browsers during scraping (Debug)</span>
+      </label>
+      <p class="settings-hint">
+        Off by default: website scrapers run in a hidden, off-screen browser. Turn this on to watch them
+        work or to solve a CAPTCHA mid-scrape. Login Mode always shows its windows.
+      </p>
+    </div>
+
+    <div class="settings-section">
+      <h3>Onboarding</h3>
+      <p class="settings-hint">
+        Show the first-run setup wizard again. The app restarts; API keys, models and settings are kept.
+      </p>
+      <button type="button" class="settings-action" id="resetOnboardingBtn">🔁 Reset Onboarding Wizard</button>
+    </div>
+
     <div class="settings-section settings-danger">
       <h3>Conversations</h3>
       <p class="settings-hint">
@@ -579,6 +615,25 @@
     'ELI5': "Explain like I'm 5 years old. Use simple language and relatable analogies."
   };
 
+  // 🛃 Fidelity mode: appended to a model's prompt when its row toggle is on.
+  // OVERALL FIDELITY and GAPS are read back out for the 🎯 score bar.
+  const FIDELITY_CLAUSE = [
+    'FIDELITY CLAUSE',
+    'Place each key point score above the key point in your reply',
+    'End the answer with OVERALL FIDELITY and GAPS',
+    '',
+    'KEY POINTS SCORE:',
+    ' Fidelity% [#%] | [idea name] | Basis: [fact / reasoning / opinion / estimate]',
+    '',
+    'OVERALL FIDELITY: __%',
+    '- Truth of facts presented',
+    '- Likelihood of omitted or unsearched facts',
+    '- Data you could not access',
+    "- Social, AI-policy, or legal omissions, even if you can't name them",
+    '',
+    'GAPS: Briefly note what may be missing or uncertain, even if only in general terms.'
+  ].join('\n');
+
   // --- TRANSPORT -------------------------------------------------------------
   // Electron's preload exposes window.api. The static GitHub Pages build has no
   // preload, so it falls back to demoTransport, which replays canned replies
@@ -587,8 +642,9 @@
 
   // Mirrors providers.json so the browser demo has a usable model list.
   const DEMO_PROVIDERS = [
+    { id: 'deepseek-search', name: 'DeepSeek Search', emoji: '🔎', kind: 'search', isStatic: true, checked: true, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 1000, ttft: 1.5 },
     { id: 'brave', name: 'Brave', emoji: '🦁', kind: 'scrape', isStatic: true, checked: true, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 100, ttft: 0.5 },
-    { id: 'google', name: 'Google AI', emoji: '🔍', kind: 'scrape', isStatic: true, checked: true, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 100, ttft: 0.5 },
+    { id: 'google', name: 'Google AI', emoji: '🔍', kind: 'scrape', isStatic: true, checked: false, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 100, ttft: 0.5 },
     { id: 'chatgpt', name: 'ChatGPT', emoji: '🤖', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 80, ttft: 0.4 },
     { id: 'claude', name: 'Claude', emoji: '🎭', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 75, ttft: 0.4 },
     { id: 'gemini', name: 'Gemini', emoji: '♊', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Detailed', maxTokens: 1000, tps: 195, ttft: 0.5 },
@@ -602,6 +658,7 @@
   const MOCK_RESPONSES = {
     "what does this tool do?": {
       long: {
+        'deepseek-search': "Web search results for: what does this tool do?\n\n1. LLM Explorer - github.com\nhttps://github.com/firestarterpro/llm-explorer\nLLM Explorer is a multi-LLM orchestration cockpit: one prompt goes to several AI sources at once, and their answers are merged into a single synthesized response with a fidelity log showing what was kept, dropped or disputed.",
         brave: "This tool is a local-first, multi-LLM orchestration cockpit. It bypasses paid API tokens by using Playwright to physically scrape answers from web interfaces (like Brave Search, Google AI Mode, ChatGPT, etc.). It then passes those raw text blocks to a local Qwen3-8B model running on your own GPU via Intel OpenVINO. The local model acts as a 'Synthesizer'—merging the consensus, flagging contradictions, and generating a Fidelity Log so you know exactly what was kept and what was dropped.",
         google: "At its core, this application functions as a decentralized AI aggregator. Instead of relying on costly APIs, it utilizes Playwright automation to query your existing web subscriptions. You select the models you want, hit send, and the tool extracts their responses. Subsequently, a local OpenVINO-powered LLM (Qwen3-8B) synthesizes the data based on a strict Fidelity Clause, eliminating hallucinations, removing fluff, and presenting a unified, highly accurate hybrid answer.",
         chatgpt: "This application acts as a unified interface for multiple AI models. It uses Playwright to automate browser scraping, gathering responses from various web UIs without needing API keys. A local Qwen3-8B model running on Intel hardware then synthesizes these responses using a 'Fidelity Clause' to merge information accurately.",
@@ -614,6 +671,7 @@
         perplexity: "This tool functions as a multi-LLM research aggregator. By leveraging Playwright, it extracts current data from various AI search engines and chat interfaces. It then utilizes a local Qwen3-8B model to synthesize the extracted text, cross-referencing claims and producing a final answer with a transparent Fidelity Log to ensure source integrity."
       },
       short: {
+        'deepseek-search': "Web search results for: what does this tool do?\n\n1. LLM Explorer - github.com\nhttps://github.com/firestarterpro/llm-explorer\nA cockpit that sends one prompt to several AIs and merges their answers.",
         brave: "This is a browser tool that scrapes web AIs and merges them locally.",
         google: "It is an AI merger that scrapes search engines and synthesizes them.",
         chatgpt: "It's a custom desktop app that scrapes multiple AIs and uses a local model to merge their answers.",
@@ -626,6 +684,7 @@
         perplexity: "It's a multi-LLM research tool that aggregates web data and synthesizes it locally."
       },
       hybrid: {
+        'deepseek-search': "Web sources describe it as a cockpit that sends one prompt to several AI sources and merges their answers into one synthesized response (github.com/firestarterpro/llm-explorer).",
         brave: "This tool is a local-first, multi-LLM orchestration cockpit. By bypassing paid APIs, it uses Playwright to scrape answers from web interfaces and passes them to a local Qwen3-8B model running on your GPU via Intel OpenVINO. It merges consensus, flags contradictions, and generates a Fidelity Log.",
         google: "This application functions as a decentralized AI aggregator using Playwright automation to query web subscriptions. The extracted responses are synthesized by a local OpenVINO-powered LLM (Qwen3-8B), which applies a strict Fidelity Clause to eliminate fluff, remove hallucinations, and present a highly accurate hybrid answer.",
         chatgpt: "This tool unifies multiple AI models through Playwright browser automation, gathering responses from web UIs without API keys. A local Qwen3-8B model on Intel hardware then synthesizes these responses using a Fidelity Clause to accurately merge information into one hybrid answer.",
@@ -1272,6 +1331,9 @@
     }
 
     const isApi = ch.kind === 'api';
+    // DeepSeek Search has a fixed endpoint and uses the DeepSeek key, so only
+    // its name and emoji are editable.
+    const isSearch = ch.kind === 'search';
     let hasKey = false;
     if (isApi && transport.hasKey && ch.keyRef) {
       try { hasKey = await transport.hasKey(ch.keyRef); } catch { /* best effort */ }
@@ -1280,9 +1342,11 @@
     const fields = [
       { name: 'name', label: 'Display name', value: ch.name, required: true },
       { name: 'emoji', label: 'Emoji', value: ch.emoji, placeholder: '🤖' },
-      isApi
-        ? { name: 'endpoint', label: 'Endpoint URL', value: ch.endpoint, required: true }
-        : { name: 'url', label: 'URL', value: ch.url, required: true },
+      isSearch
+        ? null
+        : isApi
+          ? { name: 'endpoint', label: 'Endpoint URL', value: ch.endpoint, required: true }
+          : { name: 'url', label: 'URL', value: ch.url, required: true },
       isApi
         ? {
             name: 'apiKey',
@@ -1295,12 +1359,15 @@
 
     const values = await showAppModal({
       title: `Edit ${ch.name}`,
-      message: isApi
-        ? 'Update this API model. Leave the key blank to keep the stored key.'
-        : 'Update this website scraper. Its selectors are kept as they are.',
+      message: isSearch
+        ? 'DeepSeek Search uses your DeepSeek key from Settings. Only its name and emoji can change.'
+        : isApi
+          ? 'Update this API model. Leave the key blank to keep the stored key.'
+          : 'Update this website scraper. Its selectors are kept as they are.',
       confirmLabel: 'Save',
       fields,
       validate: form => {
+        if (isSearch) return '';
         const raw = isApi ? form.endpoint : form.url;
         try {
           const url = new URL(String(raw || '').trim());
@@ -1321,7 +1388,7 @@
     if (isApi) {
       config.endpoint = values.endpoint.trim();
       if (values.apiKey && values.apiKey.trim()) config.apiKey = values.apiKey.trim();
-    } else {
+    } else if (!isSearch) {
       config.url = values.url.trim();
     }
 
@@ -1446,6 +1513,7 @@
           <input type="checkbox" aria-label="Enable model">
           <span class="llm-emoji"></span>
           <span class="llm-name"></span>
+          <button class="fidelity-btn row-icon-btn" aria-pressed="false">🛃</button>
           <button class="provider-edit-btn row-icon-btn" title="Edit provider" aria-label="Edit provider">⚙</button>
           <button class="hide-btn row-icon-btn" title="Hide provider" aria-label="Hide provider">✕</button>
           <button class="remove-btn row-icon-btn" hidden title="Remove provider">🗑</button>
@@ -1463,6 +1531,7 @@
           <span class="llm-emoji"></span>
           <span class="llm-name"></span>
           <button class="lock-btn row-icon-btn" title="Lock model" aria-pressed="false">🔓</button>
+          <button class="fidelity-btn row-icon-btn" aria-pressed="false">🛃</button>
           <button class="provider-edit-btn row-icon-btn" title="Edit provider" aria-label="Edit provider">⚙</button>
           <button class="hide-btn row-icon-btn" title="Hide provider" aria-label="Hide provider">✕</button>
           <button class="prefix-edit-btn row-icon-btn" title="Edit custom prefix">✏️</button>
@@ -1557,6 +1626,20 @@
     const hideBtn = row.querySelector('.hide-btn');
     if (hideBtn) hideBtn.setAttribute('aria-label', `Hide ${ch.name}`);
 
+    const fidelityBtn = row.querySelector('.fidelity-btn');
+    if (fidelityBtn) {
+      // DeepSeek Search sends a short search query, not a prompt.
+      fidelityBtn.hidden = ch.kind === 'search';
+      const on = !!ch.fidelity;
+      const label = on
+        ? `Fidelity Clause on: ${ch.name} scores its key points (click to turn off)`
+        : `Add the Fidelity Clause to ${ch.name}'s prompt`;
+      fidelityBtn.classList.toggle('on', on);
+      fidelityBtn.setAttribute('aria-pressed', String(on));
+      fidelityBtn.setAttribute('aria-label', label);
+      fidelityBtn.title = label;
+    }
+
     updateReorderButtons(row, index);
     if (ch.isStatic) return;
 
@@ -1639,6 +1722,18 @@
         saveUiPrefs();
         renderLeft();
         updateTimer();
+      };
+    }
+
+    const fidelityBtn = row.querySelector('.fidelity-btn');
+    if (fidelityBtn) {
+      fidelityBtn.onclick = (e) => {
+        e.stopPropagation();
+        const ch = row._ch;
+        if (!ch) return;
+        ch.fidelity = !ch.fidelity;
+        saveUiPrefs();
+        renderLeft();
       };
     }
 
@@ -1923,7 +2018,8 @@
   function addTurn(parentId, prompt, engine, order, id = newTurnId()) {
     const node = {
       id, parentId: parentId || null, childIds: [], prompt, engine, replies: {}, order: [...order],
-      hybrid: { text: 'Waiting for LLMs...', status: 'pending', log: '', score: 0, reason: '', sources: [...order], omitted: {} },
+      // score stays null until onHybridComplete has a real number to show.
+      hybrid: { text: 'Waiting for LLMs...', status: 'pending', log: '', score: null, reason: '', sources: [...order], omitted: {} },
       locked: false, createdAt: Date.now()
     };
 
@@ -1979,12 +2075,25 @@
 
   function scoreClass(pct) { return pct >= 80 ? '' : pct >= 50 ? 'mid' : 'low'; }
 
+  // Two score formats reach a card: the 🛃 Fidelity Clause ("OVERALL FIDELITY:
+  // 96%" followed by a "GAPS:" note) and the browser demo's "SCORE: 9/10" /
+  // "REASON:". Returns { pct: 0-100 or null, reason }.
   function parseScore(raw) {
-    const m = (raw || '').match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*10/i);
-    const r = (raw || '').match(/REASON:\s*(.+?)(?:\n|$)/i);
-    return { score: m ? parseFloat(m[1]) : null, reason: r ? r[1].trim() : '' };
+    const text = raw || '';
+    const fidelity = [...text.matchAll(/OVERALL FIDELITY\s*:?\s*\[?\s*(\d{1,3}(?:\.\d+)?)\s*%/gi)].pop();
+    if (fidelity) {
+      const gaps = [...text.matchAll(/GAPS\s*:/gi)].pop();
+      let reason = gaps ? text.slice(gaps.index + gaps[0].length).replace(/\s+/g, ' ').trim() : '';
+      if (reason.length > 220) reason = reason.slice(0, 219) + '…';
+      return { pct: clamp(Math.round(parseFloat(fidelity[1])), 0, 100), reason };
+    }
+    const m = text.match(/SCORE:\s*(\d+(?:\.\d+)?)\s*\/\s*10/i);
+    const r = text.match(/REASON:\s*(.+?)(?:\n|$)/i);
+    return { pct: m ? Math.round(parseFloat(m[1]) * 10) : null, reason: r ? r[1].trim() : '' };
   }
-  function stripScore(raw) { return (raw || '').replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
+  // Strips only the demo's trailing "SCORE: n/10" block. Fidelity Clause lines
+  // ("KEY POINTS SCORE:", "Fidelity% [..]") are part of the answer and stay.
+  function stripScore(raw) { return (raw || '').replace(/\n*SCORE:\s*\d+(?:\.\d+)?\s*\/\s*10[\s\S]*$/i, '').trim(); }
 
   function buildTurnMarkdown(turn) {
     const lines = [
@@ -2246,7 +2355,7 @@
 
     const raw = reply.text || '';
     const parsed = parseScore(raw);
-    const pctValue = parsed.score != null ? Math.round(parsed.score * 10) : null;
+    const pctValue = parsed.pct;
     const secs = reply.ms ? (reply.ms / 1000).toFixed(1) + 's' : '';
     const body = stripScore(raw);
 
@@ -2281,14 +2390,16 @@
       refs.log.hidden = !log;
     }
 
-    const score = Number(hybrid.score) || 0;
+    // Only a real number is shown: none until the turn completes, and none at
+    // all when no source reported a fidelity score (see onHybridComplete).
+    const score = typeof hybrid.score === 'number' && Number.isFinite(hybrid.score) ? hybrid.score : null;
+    const reasonText = hybrid.reason || '';
     const open = refs.scoreBar.classList.contains('open');
-    refs.scoreBar.className = 'score-bar ' + scoreClass(score) + (open ? ' open' : '');
-    refs.scoreBar.style.display = '';
-    refs.pct.textContent = `🎯 ${score}%`;
-    if (refs.reason.textContent !== (hybrid.reason || '')) {
-      refs.reason.textContent = hybrid.reason || '';
-    }
+    refs.scoreBar.className = 'score-bar' + (score != null ? ' ' + scoreClass(score) : '') + (open ? ' open' : '');
+    refs.scoreBar.style.display = score != null || reasonText ? '' : 'none';
+    refs.pct.hidden = score == null;
+    if (score != null) refs.pct.textContent = `🎯 ${score}%`;
+    if (refs.reason.textContent !== reasonText) refs.reason.textContent = reasonText;
 
     const order = (t.order || []).filter(id => CH.some(ch => ch.id === id));
     const wanted = new Set(order);
@@ -2352,7 +2463,7 @@
     const ch = CH.find(c => c.id === activeTab) || {};
     const raw = reply.text || '';
     const parsed = parseScore(raw);
-    const pctValue = parsed.score != null ? Math.round(parsed.score * 10) : null;
+    const pctValue = parsed.pct;
     const body = stripScore(raw);
 
     const label = `${ch.emoji || ''} ${ch.name || ''}`.trim();
@@ -2510,6 +2621,8 @@
   const sbProgress = document.getElementById('sbProgress');
   const sbFill = document.getElementById('sbFill');
 
+  // Progress for the most recent send, driven by real reply-received and
+  // hybrid-complete events. Each model counts once.
   let inflight = null, ticker = null;
   function estimateSend() {
     const depth = parseInt(hsRange.value);
@@ -2527,33 +2640,48 @@
     sbTimer.textContent = `est. next send: ~${estimateSend().toFixed(1)}s`;
     sbTimer.classList.remove('done');
   }
-  function startSend() {
-    const active = CH.filter(c => c.checked);
+  function startSend(turnId, models) {
     const estSec = estimateSend();
-    inflight = { start: Date.now(), est: estSec, total: active.length, left: active.length };
-    sbStatus.textContent = `sending to ${active.length}`;
+    inflight = { turnId, start: Date.now(), est: estSec, total: models.length, replied: new Set(), finished: false };
+    sbTimer.classList.remove('done');
+    sbStatus.textContent = `sending to ${models.length}`;
     if (sbProgress) sbProgress.style.display = 'block';
     if (ticker) clearInterval(ticker);
     ticker = setInterval(tick, 100);
   }
+  function noteReply(turnId, model, status) {
+    if (!inflight || inflight.turnId !== turnId || status === 'loading') return;
+    inflight.replied.add(model);
+  }
+  function finishSend(turnId) {
+    if (!inflight || inflight.turnId !== turnId) return;
+    inflight.finished = true;
+    tick();
+  }
   function tick() {
     if (!inflight) return;
     const elapsed = (Date.now() - inflight.start) / 1000;
-    const left = Math.max(0, inflight.est - elapsed);
-    if (sbFill) sbFill.style.width = Math.min(100, (elapsed / inflight.est) * 100) + '%';
-    sbTimer.textContent = left > 0 ? `${left.toFixed(1)}s left` : 'finishing…';
-    sbStatus.textContent = `${inflight.total - inflight.left}/${inflight.total} done · ${elapsed.toFixed(1)}s`;
-    if (Math.random() < 0.03 && inflight.left > 0) inflight.left--;
-    if (inflight.left === 0) {
+    const replied = inflight.replied.size;
+    if (inflight.finished) {
       clearInterval(ticker); ticker = null;
       sbTimer.classList.add('done');
       sbTimer.textContent = `✓ done in ${elapsed.toFixed(1)}s`;
-      sbStatus.textContent = `${inflight.total} replies`;
+      sbStatus.textContent = `${replied}/${inflight.total} replies`;
+      const finishedTurn = inflight.turnId;
       setTimeout(() => {
+        // A newer send owns the status bar now.
+        if (!inflight || inflight.turnId !== finishedTurn) return;
         inflight = null; if (sbProgress) sbProgress.style.display = 'none';
         if (sbFill) sbFill.style.width = '0%'; sbStatus.textContent = 'idle'; updateTimer();
       }, 2600);
+      return;
     }
+    const left = Math.max(0, inflight.est - elapsed);
+    if (sbFill) sbFill.style.width = Math.min(100, (elapsed / inflight.est) * 100) + '%';
+    sbTimer.textContent = replied >= inflight.total
+      ? 'synthesizing…'
+      : (left > 0 ? `${left.toFixed(1)}s left` : 'finishing…');
+    sbStatus.textContent = `${replied}/${inflight.total} replied · ${elapsed.toFixed(1)}s`;
   }
 
   const LEGENDS = {
@@ -2564,10 +2692,12 @@
       ['✏️', 'Custom Prefix: Edit personalized instructions stored per model.'],
       ['🔥', 'Visual Heat: Row border/glow shifts from cool blue to orange to glowing gold.'],
       ['🌿', 'Branch: Fork conversation into alternative paths.'],
+      ['🛃', 'Fidelity Clause: That model scores each key point and ends with OVERALL FIDELITY and GAPS.'],
+      ['🔎', 'DeepSeek Search: Web results through your DeepSeek key. No browser, no CAPTCHA.'],
       ['🪟', 'Hybrid Tab: Consolidated synthesized response.']
     ],
     reply: [
-      ['🎯', 'Score Bar: Expand the Fidelity Clause rationale.'],
+      ['🎯', 'Score Bar: OVERALL FIDELITY reported by 🛃 sources (the Hybrid shows their average) and how many sources were used.'],
       ['🦁', 'Source Emoji: Inspect that individual raw model output.'],
       ['⊞ View Sources', 'Opens replies contributing to the synthesis.'],
       ['📥 Export', 'Saves the current turn (prompt, sources, synthesis) as a Markdown file.'],
@@ -2817,7 +2947,7 @@
   // DeepSeek's engine key is always listed; every active API provider adds its
   // own keyRef. Hidden providers are not "active" and are intentionally absent.
   function apiKeyEntries() {
-    const entries = [{ ref: 'deepseek', name: 'DeepSeek', emoji: '🌊', detail: 'Cloud synthesis engine' }];
+    const entries = [{ ref: 'deepseek', name: 'DeepSeek', emoji: '🌊', detail: 'Synthesis engine + DeepSeek Search' }];
     CH.filter(channel => channel.kind === 'api' && channel.keyRef).forEach(channel => {
       const ref = channel.keyRef;
       if (entries.some(entry => entry.ref === ref)) return;
@@ -2909,6 +3039,61 @@
     await renderSettingsKeys();
   }
 
+  // "Show browsers during scraping (Debug)" lives in main's settings.json,
+  // because main reads it when it launches each scrape.
+  const showBrowsersToggle = document.getElementById('showBrowsersToggle');
+  const resetOnboardingBtn = document.getElementById('resetOnboardingBtn');
+
+  async function renderSettingsPrefs() {
+    if (!showBrowsersToggle) return;
+    if (!transport.getAppPrefs) {
+      showBrowsersToggle.disabled = true;
+      return;
+    }
+    try {
+      const prefs = await transport.getAppPrefs();
+      showBrowsersToggle.checked = !!(prefs && prefs.showBrowsers);
+    } catch {
+      // Leave the checkbox as it is; the scrape default stays hidden.
+    }
+  }
+
+  if (showBrowsersToggle) {
+    showBrowsersToggle.onchange = async () => {
+      if (!transport.setAppPref) return;
+      const wanted = showBrowsersToggle.checked;
+      try {
+        const result = await transport.setAppPref('showBrowsers', wanted);
+        if (!result?.ok) throw new Error(result?.error || 'unknown error');
+        setSettingsStatus(wanted
+          ? 'Scrapes will open visible browser windows (debug).'
+          : 'Scrapes will run in hidden, off-screen browsers.');
+      } catch (error) {
+        showBrowsersToggle.checked = !wanted;
+        setSettingsStatus(`Could not save the setting: ${error.message}`);
+      }
+    };
+  }
+
+  // Clears the first-run flag, then restarts the app so the wizard opens on a
+  // fresh window. Keys, models and settings are untouched.
+  async function resetOnboarding() {
+    if (!confirm('Show the setup wizard again? LLM Explorer will restart. Your API keys, models and settings are kept.')) return;
+    try { localStorage.removeItem(ONBOARDED_KEY); } catch {}
+    if (transport.relaunchApp) {
+      setSettingsStatus('Restarting…');
+      try {
+        await transport.relaunchApp();
+        return;
+      } catch (error) {
+        setSettingsStatus(`Could not restart automatically: ${error.message}`);
+      }
+    }
+    // Browser demo, or the restart failed: open the wizard in place.
+    if (settingsModal) settingsModal.hidden = true;
+    showOnboarding();
+  }
+
   async function openSettings() {
     if (!transport.hasKey || !transport.setKey) {
       alert('Settings are available in the Electron desktop app.');
@@ -2917,7 +3102,7 @@
     if (!settingsModal) return;
     setSettingsStatus('');
     settingsModal.hidden = false;
-    await renderSettingsKeys();
+    await Promise.all([renderSettingsKeys(), renderSettingsPrefs()]);
     if (settingsClose) settingsClose.focus();
   }
 
@@ -2955,6 +3140,7 @@
     };
   }
   if (clearConversationsBtn) clearConversationsBtn.onclick = clearAllConversations;
+  if (resetOnboardingBtn) resetOnboardingBtn.onclick = resetOnboarding;
 
   const templateBtn = document.getElementById('templateBtn');
   if (templateBtn) templateBtn.onclick = openTemplateModal;
@@ -3102,9 +3288,13 @@
     return lines.join('\n');
   }
 
-  // Prefix + History Context + Original Prompt, joined with blank lines so a
-  // scraped page or API model can tell the sections apart.
+  // Prefix + History Context + Original Prompt (+ 🛃 Fidelity Clause), joined
+  // with blank lines so a scraped page or API model can tell the sections
+  // apart. Scrapers also get the Forced Text Box instruction, added in
+  // scrapers.js.
   function buildModelPrompt(ch, promptText, parentId) {
+    // DeepSeek Search takes a short query, not a prompt (main enforces this too).
+    if (ch && ch.kind === 'search') return promptText;
     const parts = [];
 
     if (!prefixToggleBtn || prefixToggleBtn.classList.contains('on')) {
@@ -3116,13 +3306,14 @@
     if (history) parts.push(`Conversation so far:\n${history}`);
 
     parts.push(promptText);
+    if (ch && ch.fidelity) parts.push(FIDELITY_CLAUSE);
     return parts.join('\n\n');
   }
 
   function dispatchPrompt(promptText, activeModels, engine, parentId = convo.activeLeafId) {
     const turnId = newTurnId();
     addTurn(parentId, promptText, engine, activeModels, turnId);
-    renderAll(); updateTimer(); startSend();
+    renderAll(); updateTimer(); startSend(turnId, activeModels);
 
     // One shaped prompt per active model. The turn itself keeps the original
     // prompt so the UI and the export show what the user actually typed.
@@ -3211,7 +3402,7 @@
       if (turn) {
         turn.hybrid.text = `⚠️ Local Engine Offline\n\n${message || 'The OVMS server is not responding.'}`;
         turn.hybrid.status = 'error';
-        turn.hybrid.score = 0;
+        turn.hybrid.score = null;
         turn.hybrid.reason = 'Local engine offline — switch to DeepSeek API or start OVMS.';
         turn.locked = true;
         renderAll();
@@ -3224,6 +3415,7 @@
     transport.onReplyReceived(({ turnId, model, text, status, ms }) => {
       const turn = convo.nodes[turnId];
       if (!turn) return;
+      noteReply(turnId, model, status);
       turn.replies[model] = { text: text || '', status: status || 'success', ms: Number(ms) || 0 };
       if (!turn.order.includes(model)) turn.order.push(model);
       if (status !== 'loading' && !turn.locked) {
@@ -3235,9 +3427,28 @@
     });
   }
 
-  // Main sends status and provider errors as bracketed chunks. A streamed
-  // answer chunk could legitimately contain brackets, so require one complete
-  // single-line [..] pair before treating it as a log line.
+  // Status and provider-error lines arrive on hybrid-log and never touch the
+  // answer text, so a streamed "[1]" citation can't be mistaken for one.
+  function appendHybridLog(turn, line) {
+    if (!turn || !turn.hybrid || !line) return;
+    turn.hybrid.log = turn.hybrid.log ? `${turn.hybrid.log}\n${line}` : line;
+    const turnEl = turnEls.get(turn.id);
+    const logEl = turnEl ? turnEl.querySelector('.hybrid-log') : null;
+    if (logEl) {
+      logEl.textContent = turn.hybrid.log;
+      logEl.hidden = false;
+    }
+  }
+
+  if (transport.onHybridLog) {
+    transport.onHybridLog(({ turnId, line } = {}) => {
+      appendHybridLog(convo.nodes[turnId], String(line || '').trim());
+    });
+  }
+
+  // The Local engine's synthesize.py may still print a bracketed status line to
+  // stdout. Require one complete single-line [..] pair before treating a chunk
+  // as a log line.
   function isStatusChunk(chunk) {
     const trimmed = String(chunk || '').trim();
     if (trimmed.length < 3 || !trimmed.startsWith('[') || !trimmed.endsWith(']')) return false;
@@ -3253,21 +3464,8 @@
       const turnEl = turnEls.get(turnId);
       const hybridBody = turnEl ? turnEl.querySelector('.hybrid-body[data-kind="hybrid"]') : null;
 
-      if (isStatusChunk(chunk)) {
-        const line = String(chunk).trim();
-        turn.hybrid.log = turn.hybrid.log ? `${turn.hybrid.log}\n${line}` : line;
-        // Never let a status line be mistaken for the answer. Clearing the
-        // placeholder also keeps an aborted synthesis from looking "in flight".
-        if (PLACEHOLDER_RE.test(turn.hybrid.text)) turn.hybrid.text = '';
-
-        if (hybridBody) hybridBody.textContent = turn.hybrid.text;
-        const logEl = turnEl ? turnEl.querySelector('.hybrid-log') : null;
-        if (logEl) {
-          logEl.textContent = turn.hybrid.log;
-          logEl.hidden = false;
-        }
-        const centerPanel = document.querySelector('.center');
-        if (centerPanel) centerPanel.scrollTop = centerPanel.scrollHeight;
+      if (!String(turn.engine || '').includes('Cloud') && isStatusChunk(chunk)) {
+        appendHybridLog(turn, String(chunk).trim());
         return;
       }
 
@@ -3286,19 +3484,57 @@
   }
 
   if (transport.onHybridComplete) {
+    // payload: { turnId, ok, used, requested } from main. The browser demo
+    // sends only turnId, so every field has a fallback.
     transport.onHybridComplete((payload = {}) => {
       const turn = convo.nodes[payload.turnId];
       if (!turn) return;
+      finishSend(turn.id);
+      const hybrid = turn.hybrid;
+      turn.locked = true;
       // An engine error already owns this turn's final state.
-      if (turn.hybrid.status === 'error') {
-        turn.locked = true;
+      if (hybrid.status === 'error') {
         renderAll();
         return;
       }
-      turn.hybrid.status = 'complete';
-      turn.hybrid.score = 100;
-      turn.hybrid.reason = "Synthesis Complete";
-      turn.locked = true;
+
+      if (PLACEHOLDER_RE.test(hybrid.text)) hybrid.text = '';
+      const hasText = !!String(hybrid.text || '').trim();
+      const ok = hasText && payload.ok !== false;
+
+      const replies = (turn.order || []).map(id => replyOf(turn, id)).filter(Boolean);
+      const requested = Number.isFinite(payload.requested) ? payload.requested : replies.length;
+      const used = Number.isFinite(payload.used)
+        ? payload.used
+        : replies.filter(reply => reply.status !== 'error' && String(reply.text || '').trim()).length;
+
+      if (!ok) {
+        // The log says why (missing key, no sources, API error); surface the
+        // last line here so a failed turn never looks finished.
+        const lastLine = String(hybrid.log || '').split('\n').filter(Boolean).pop() || '';
+        hybrid.status = 'error';
+        hybrid.score = null;
+        hybrid.reason = hasText
+          ? '⚠️ Synthesis stopped early. See the log above.'
+          : `⚠️ No synthesis${lastLine ? `: ${lastLine}` : '. See the log above.'}`;
+        renderAll();
+        return;
+      }
+
+      // The 🎯 score is the average OVERALL FIDELITY of the sources that ran
+      // with the 🛃 clause. Without any, only the source count is shown.
+      const fidelities = replies
+        .filter(reply => reply.status !== 'error')
+        .map(reply => parseScore(reply.text).pct)
+        .filter(pct => pct != null);
+      const sourceNote = `Synthesized from ${used} of ${requested} source${requested === 1 ? '' : 's'}`;
+      hybrid.status = 'complete';
+      hybrid.score = fidelities.length
+        ? Math.round(fidelities.reduce((sum, pct) => sum + pct, 0) / fidelities.length)
+        : null;
+      hybrid.reason = fidelities.length
+        ? `${sourceNote} · average source fidelity (${fidelities.length} reporting)`
+        : sourceNote;
       renderAll();
     });
   }
