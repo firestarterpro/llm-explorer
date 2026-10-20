@@ -132,6 +132,82 @@ function assertHttpUrl(value, label) {
   return url.toString();
 }
 
+// Builds a complete provider config. `base` is the existing config when a
+// provider is being edited, so partial updates (e.g. name only) keep selectors,
+// endpoints and other fields the renderer never displays.
+function buildProviderConfig(input, base = {}) {
+  if (!input || typeof input !== 'object') throw new Error('A provider configuration is required.');
+
+  const kind = input.kind === 'api' || input.kind === 'scrape'
+    ? input.kind
+    : (base.kind === 'api' ? 'api' : 'scrape');
+  const name = String(input.name ?? base.name ?? '').trim();
+  if (!name) throw new Error('Provider name is required.');
+
+  const emoji = typeof input.emoji === 'string' ? input.emoji.trim() : '';
+  const provider = {
+    ...base,
+    id: String(input.id ?? base.id ?? '').trim(),
+    name,
+    emoji: emoji || base.emoji || (kind === 'api' ? '🧩' : '🌐'),
+    kind
+  };
+
+  if (kind === 'api') {
+    provider.endpoint = assertHttpUrl(input.endpoint ?? base.endpoint, 'Endpoint');
+    provider.modelId = String(input.modelId ?? base.modelId ?? '').trim();
+    if (!provider.modelId) throw new Error('Model ID is required for an API provider.');
+    provider.keyRef = String(input.keyRef ?? base.keyRef ?? `provider:${provider.id}`).trim();
+    provider.isStatic = false;
+    delete provider.url;
+    delete provider.inputSelector;
+    delete provider.responseSelector;
+    delete provider.submitAction;
+    delete provider.submitButton;
+    delete provider.doneSelector;
+    delete provider.search;
+  } else {
+    provider.url = assertHttpUrl(input.url ?? base.url, 'Provider URL');
+    provider.inputSelector = String(input.inputSelector ?? base.inputSelector ?? '').trim();
+    provider.responseSelector = String(input.responseSelector ?? base.responseSelector ?? '').trim();
+    if (!provider.inputSelector || !provider.responseSelector) {
+      throw new Error('Website providers need an input selector and a response selector.');
+    }
+
+    const submitAction = input.submitAction ?? base.submitAction;
+    provider.submitAction = submitAction === 'button' ? 'button' : 'enter';
+    provider.submitButton = String(input.submitButton ?? base.submitButton ?? '').trim();
+    if (provider.submitAction === 'button' && !provider.submitButton) {
+      throw new Error('A submit button selector is required when submitAction is "button".');
+    }
+
+    provider.search = input.search !== undefined ? !!input.search : !!base.search;
+    provider.isStatic = typeof input.isStatic === 'boolean'
+      ? input.isStatic
+      : (typeof base.isStatic === 'boolean' ? base.isStatic : provider.search);
+    provider.doneSelector = input.doneSelector !== undefined
+      ? (String(input.doneSelector || '').trim() || null)
+      : (base.doneSelector || null);
+    const timeout = Number(input.timeoutMs ?? base.timeoutMs);
+    provider.timeoutMs = Number.isFinite(timeout) && timeout > 0 ? timeout : 180000;
+    delete provider.endpoint;
+    delete provider.modelId;
+    delete provider.keyRef;
+  }
+
+  // UI defaults can travel with the config so the first render looks right.
+  for (const key of ['checked', 'value', 'prefixType', 'maxTokens', 'tps', 'ttft', 'fidelity']) {
+    if (input[key] !== undefined) provider[key] = input[key];
+  }
+
+  // isUser is derived by loadProviders(); never persist it.
+  delete provider.isUser;
+  // Keys never go in a provider file; they belong in the encrypted store.
+  delete provider.apiKey;
+
+  return provider;
+}
+
 function addProvider(input) {
   if (!input || typeof input !== 'object') throw new Error('A provider configuration is required.');
 
@@ -139,7 +215,6 @@ function addProvider(input) {
   const builtinIds = new Set(readProviderFile(BUILTIN_PROVIDERS_PATH).map(item => String(item.id)));
   const userIds = new Set(userList.map(item => String(item.id)));
 
-  const kind = input.kind === 'api' ? 'api' : 'scrape';
   const name = String(input.name || '').trim();
   if (!name) throw new Error('Provider name is required.');
 
@@ -157,50 +232,42 @@ function addProvider(input) {
     id = uniqueProviderId(slugifyProviderId(name), new Set([...builtinIds, ...userIds]));
   }
 
-  const provider = {
-    id,
-    name,
-    emoji: typeof input.emoji === 'string' && input.emoji.trim()
-      ? input.emoji.trim()
-      : (kind === 'api' ? '🧩' : '🌐'),
-    kind
-  };
-
-  if (kind === 'api') {
-    provider.endpoint = assertHttpUrl(input.endpoint, 'Endpoint');
-    provider.modelId = String(input.modelId || '').trim();
-    if (!provider.modelId) throw new Error('Model ID is required for an API provider.');
-    provider.keyRef = String(input.keyRef || `provider:${id}`).trim();
-    provider.isStatic = false;
-  } else {
-    provider.url = assertHttpUrl(input.url, 'Provider URL');
-    provider.inputSelector = String(input.inputSelector || '').trim();
-    provider.responseSelector = String(input.responseSelector || '').trim();
-    if (!provider.inputSelector || !provider.responseSelector) {
-      throw new Error('Website providers need an input selector and a response selector.');
-    }
-    provider.submitAction = input.submitAction === 'button' ? 'button' : 'enter';
-    provider.submitButton = String(input.submitButton || '').trim();
-    if (provider.submitAction === 'button' && !provider.submitButton) {
-      throw new Error('A submit button selector is required when submitAction is "button".');
-    }
-    provider.search = !!input.search;
-    provider.isStatic = typeof input.isStatic === 'boolean' ? input.isStatic : provider.search;
-    provider.doneSelector = String(input.doneSelector || '').trim() || null;
-    const timeout = Number(input.timeoutMs);
-    provider.timeoutMs = Number.isFinite(timeout) && timeout > 0 ? timeout : 180000;
-  }
-
-  // UI defaults can travel with the config so the first render looks right.
-  for (const key of ['checked', 'value', 'prefixType', 'maxTokens', 'tps', 'ttft', 'fidelity']) {
-    if (input[key] !== undefined) provider[key] = input[key];
-  }
-
-  // Keys never go in a provider file; they belong in the encrypted store.
-  delete provider.apiKey;
+  const provider = buildProviderConfig({ ...input, id }, {});
 
   writeUserProviders([...userList.filter(item => String(item.id) !== id), provider]);
   return { ok: true, provider: normalizeProvider(provider, true) };
+}
+
+// Editing a built-in writes a user-level override with the same id; loadProviders
+// merges user entries on top of the read-only built-ins. Removing that override
+// later restores the shipped default.
+function editProvider(id, input) {
+  const targetId = String(id || '').trim();
+  if (!targetId) throw new Error('A provider id is required.');
+  if (!input || typeof input !== 'object') throw new Error('A provider configuration is required.');
+
+  const existing = loadProviders().find(provider => provider.id === targetId);
+  if (!existing) throw new Error(`Unknown provider "${targetId}".`);
+
+  const userList = readProviderFile(userProvidersPath());
+  const provider = buildProviderConfig({ ...input, id: targetId }, existing);
+
+  writeUserProviders([...userList.filter(item => String(item.id) !== targetId), provider]);
+
+  // The API key arrives with the edit form but still belongs only in the
+  // encrypted store. An empty value means "keep the current key".
+  let keyError = null;
+  const apiKey = typeof input.apiKey === 'string' ? input.apiKey.trim() : '';
+  if (provider.kind === 'api' && apiKey) {
+    try {
+      const saved = setKey(provider.keyRef, apiKey);
+      if (!saved?.ok) keyError = saved?.error || 'The API key could not be saved.';
+    } catch (error) {
+      keyError = error.message;
+    }
+  }
+
+  return { ok: true, provider: normalizeProvider(provider, true), keyError };
 }
 
 function removeProvider(id) {
@@ -762,6 +829,16 @@ app.whenReady().then(() => {
     }
   });
 
+  // Editing works for built-ins too: it writes a userData override that wins
+  // over providers.json without touching the read-only app bundle.
+  ipcMain.handle('providers:edit', (event, id, cfg) => {
+    try {
+      return editProvider(id, cfg);
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
   // 3. Encrypted key store. No IPC path returns a key to the renderer.
   ipcMain.handle('keys:set', (event, ref, key) => {
     try {
@@ -821,27 +898,62 @@ app.whenReady().then(() => {
   });
 
   // 5. Handle Login Mode
-  ipcMain.on('login-mode', async (event) => {
-    console.log("Starting Login Mode. Please log into the windows that open.");
-    
-    // Sequentially open each website provider so RAM doesn't blow up
-    for (const config of loadProviders().filter(provider => provider.kind === 'scrape')) {
+  // Opens one headed persistent context per enabled website provider, then
+  // waits for the user to close that window before moving to the next one.
+  // Cookies/sessions are flushed to the profile directory when the window closes.
+  ipcMain.on('login-mode', async (event, requestedIds) => {
+    // An empty list (e.g. nothing ticked yet) falls back to the enabled
+    // defaults, so Login Mode always has something useful to open.
+    const wanted = Array.isArray(requestedIds) && requestedIds.length > 0
+      ? new Set(requestedIds.map(id => String(id)))
+      : null;
+
+    const configs = loadProviders().filter(provider => {
+      if (provider.kind !== 'scrape') return false;
+      if (wanted) return wanted.has(provider.id);
+      // No renderer payload (older preload): fall back to the enabled defaults.
+      return provider.checked !== false;
+    });
+
+    if (configs.length === 0) {
+      console.warn('Login Mode: no enabled website providers to open.');
+      return;
+    }
+
+    console.log(`Starting Login Mode for ${configs.map(config => config.name).join(', ')}...`);
+
+    // Sequentially open each website provider so RAM doesn't blow up.
+    for (const config of configs) {
       const id = config.id;
+      let context;
       try {
-        const context = await chromium.launchPersistentContext(path.join(__dirname, `user_data_${id}`), {
+        // In a packaged app __dirname lives inside app.asar (read-only), so the
+        // profile must live under userData. scrapers.js uses the same helper,
+        // which means Login Mode and scraping share one session.
+        const userDataDir = scrapers.getProfileDir(id);
+        fs.mkdirSync(userDataDir, { recursive: true });
+
+        context = await chromium.launchPersistentContext(userDataDir, {
           headless: false,
           viewport: { width: 1024, height: 768 },
           args: ['--disable-blink-features=AutomationControlled']
         });
-        const page = await context.newPage();
-        await page.goto(config.url, { timeout: 60000 }).catch(() => {});
-        
-        // Wait for user to manually close the window
-        await new Promise(resolve => {
-          context.on('close', resolve);
+
+        // Register the listener before navigating so a window closed while the
+        // page is still loading can never leave this loop hanging.
+        const closed = new Promise(resolve => context.once('close', resolve));
+        const page = context.pages()[0] || await context.newPage();
+        await page.goto(config.url, { timeout: 60000 }).catch(error => {
+          console.warn(`Login Mode could not load ${config.name}:`, error.message);
         });
-      } catch (e) {
-        console.error(`Login failed for ${id}:`, e);
+
+        console.log(`Log into ${config.name}, then close its window to save the session.`);
+        await closed;
+        console.log(`${config.name} session saved.`);
+      } catch (error) {
+        console.error(`Login failed for ${id}:`, error.message);
+      } finally {
+        if (context) await context.close().catch(() => {});
       }
     }
   });

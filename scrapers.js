@@ -1,8 +1,19 @@
 const { chromium } = require('playwright');
+const { app } = require('electron');
 const path = require('path');
 
-// Utility to generate unique user data dirs
-const getDataDir = (name) => path.join(__dirname, `user_data_${name}`);
+// Profile directories must be writable at runtime. In a packaged app __dirname
+// points into app.asar, which is read-only, so keep sessions under userData.
+// main.js uses this same helper for Login Mode, so login and scraping share
+// one persistent session per provider.
+function getProfileDir(name) {
+  const root = app && app.isPackaged
+    ? path.join(app.getPath('userData'), 'browser_profiles')
+    : __dirname;
+  return path.join(root, `user_data_${name}`);
+}
+
+const getDataDir = getProfileDir;
 
 // Response completion tuning. A provider can override timeoutMs and may supply
 // a doneSelector that is visible while a reply is generating.
@@ -146,5 +157,6 @@ async function genericScrape(config, promptText) {
 // Provider configs live in providers.json (built-ins) and userData/providers.json
 // (user-added), loaded by main.js. This module only knows how to run a config.
 module.exports = {
-  scrape: (config, prompt) => genericScrape(config, prompt)
+  scrape: (config, prompt) => genericScrape(config, prompt),
+  getProfileDir
 };

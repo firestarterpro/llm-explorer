@@ -77,6 +77,8 @@
   .grab-handle:hover { opacity: 1; color: var(--text); }
   .llm-head input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
   .llm-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-icon-btn { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; line-height: 1; padding: 0 2px; flex: 0 0 auto; }
+  .row-icon-btn:hover { color: var(--accent); }
   
   .slider-row { grid-area: slider; display: flex; align-items: center; gap: 8px; }
   .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; height: 4px; }
@@ -288,7 +290,7 @@
   <div class="center">
     <div class="topbar">
       <div class="tabs" id="tabs"></div>
-      <button id="loginBtn" class="electron-only" onclick="transport.startLoginMode?.()">🔐 Login Mode</button>
+      <button id="loginBtn" class="electron-only">🔐 Login Mode</button>
       <button id="newChatBtn" onclick="clearChat()">🗑️ New Chat</button>
       <button id="settingsBtn">⚙ Settings</button>
       <button class="legend-pill" id="legendPill">📖 Legend ▾</button>
@@ -537,6 +539,9 @@
   if (!isElectron) document.documentElement.classList.add('demo-mode');
 
   let CH = [];
+  // Providers the user hid with ✕. Persisted separately from the provider
+  // registry so hiding a built-in never deletes or edits it.
+  let hiddenIds = new Set();
   const UI_PREFS_KEY = 'llmx.uiPrefs.v1';
 
   function loadUiPrefs() {
@@ -567,6 +572,7 @@
       localStorage.setItem(UI_PREFS_KEY, JSON.stringify({
         version: 1,
         order: CH.map(ch => ch.id),
+        hidden: [...hiddenIds],
         channels
       }));
     } catch {
@@ -578,6 +584,8 @@
     const prefs = loadUiPrefs();
     if (prefs.channels) delete prefs.channels[id];
     if (Array.isArray(prefs.order)) prefs.order = prefs.order.filter(item => item !== id);
+    if (Array.isArray(prefs.hidden)) prefs.hidden = prefs.hidden.filter(item => item !== id);
+    hiddenIds.delete(id);
     try {
       localStorage.setItem(UI_PREFS_KEY, JSON.stringify(prefs));
     } catch {
@@ -614,6 +622,7 @@
         kind: provider.kind || 'scrape',
         isStatic: !!provider.isStatic,
         isUser: !!provider.isUser,
+        url: provider.url || '',
         endpoint: provider.endpoint || '',
         modelId: provider.modelId || '',
         keyRef: provider.keyRef || '',
@@ -644,7 +653,9 @@
         console.error('Could not load provider registry:', error);
       }
     }
-    CH = buildChannels(providers, loadUiPrefs());
+    const prefs = loadUiPrefs();
+    hiddenIds = new Set(Array.isArray(prefs.hidden) ? prefs.hidden.map(String) : []);
+    CH = buildChannels(providers, prefs).filter(ch => !hiddenIds.has(ch.id));
     renderLeft();
     updateHistory();
     updateTimer();
@@ -909,6 +920,83 @@
     saveUiPrefs();
   }
 
+  // Edits an existing provider in place. Built-ins are edited by writing a
+  // userData override in main; the provider registry file is never touched.
+  async function editProviderConfig(ch) {
+    if (!transport.editProvider) {
+      alert('Editing providers is available in the Electron desktop app.');
+      return;
+    }
+
+    const isApi = ch.kind === 'api';
+    let hasKey = false;
+    if (isApi && transport.hasKey && ch.keyRef) {
+      try { hasKey = await transport.hasKey(ch.keyRef); } catch { /* best effort */ }
+    }
+
+    const fields = [
+      { name: 'name', label: 'Display name', value: ch.name, required: true },
+      { name: 'emoji', label: 'Emoji', value: ch.emoji, placeholder: '🤖' },
+      isApi
+        ? { name: 'endpoint', label: 'Endpoint URL', value: ch.endpoint, required: true }
+        : { name: 'url', label: 'URL', value: ch.url, required: true },
+      isApi
+        ? {
+            name: 'apiKey',
+            label: hasKey ? 'API key (leave blank to keep the current key)' : 'API key (optional)',
+            type: 'password',
+            placeholder: hasKey ? '••••••••' : 'sk-...'
+          }
+        : null
+    ].filter(Boolean);
+
+    const values = await showAppModal({
+      title: `Edit ${ch.name}`,
+      message: isApi
+        ? 'Update this API model. Leave the key blank to keep the stored key.'
+        : 'Update this website scraper. Its selectors are kept as they are.',
+      confirmLabel: 'Save',
+      fields,
+      validate: form => {
+        const raw = isApi ? form.endpoint : form.url;
+        try {
+          const url = new URL(String(raw || '').trim());
+          if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
+        } catch {
+          return isApi ? 'Enter a valid http(s) endpoint URL.' : 'Enter a valid http(s) site URL.';
+        }
+        return '';
+      }
+    });
+    if (!values) return;
+
+    const config = {
+      kind: ch.kind,
+      name: values.name.trim(),
+      emoji: (values.emoji || '').trim()
+    };
+    if (isApi) {
+      config.endpoint = values.endpoint.trim();
+      if (values.apiKey && values.apiKey.trim()) config.apiKey = values.apiKey.trim();
+    } else {
+      config.url = values.url.trim();
+    }
+
+    try {
+      const result = await transport.editProvider(ch.id, config);
+      if (!result?.ok) {
+        alert(result?.error || 'Could not update the provider.');
+        return;
+      }
+      if (result.keyError) alert(`Provider saved, but the API key was not: ${result.keyError}`);
+    } catch (error) {
+      alert(`Could not update the provider: ${error.message}`);
+      return;
+    }
+
+    await refreshProviders();
+  }
+
   function heatColor(value) {
     const v = Math.max(1, Math.min(100, Number(value) || 1));
     const lerp = (a, b, t) => Math.round(a + (b - a) * t);
@@ -995,6 +1083,7 @@
 
   const leftRows = new Map();
   let leftAddBtn = null;
+  let leftRestoreBtn = null;
   let leftOrderKey = '';
 
   function leftRowSignature(ch) {
@@ -1014,7 +1103,9 @@
           <input type="checkbox" aria-label="Enable model">
           <span class="llm-emoji"></span>
           <span class="llm-name"></span>
-          <button class="remove-btn" hidden title="Remove provider">✕</button>
+          <button class="provider-edit-btn row-icon-btn" title="Edit provider" aria-label="Edit provider">⚙</button>
+          <button class="hide-btn row-icon-btn" title="Hide provider" aria-label="Hide provider">✕</button>
+          <button class="remove-btn row-icon-btn" hidden title="Remove provider">🗑</button>
         </div>
         <div class="row-rail">
           <button class="reorder-btn" data-dir="-1" title="Move up">▲</button>
@@ -1028,9 +1119,11 @@
           <input type="checkbox" aria-label="Enable model">
           <span class="llm-emoji"></span>
           <span class="llm-name"></span>
-          <button class="lock-btn" title="Lock model" aria-pressed="false">🔓</button>
-          <button class="prefix-edit-btn" title="Edit custom prefix">✏️</button>
-          <button class="remove-btn" hidden title="Remove provider">✕</button>
+          <button class="lock-btn row-icon-btn" title="Lock model" aria-pressed="false">🔓</button>
+          <button class="provider-edit-btn row-icon-btn" title="Edit provider" aria-label="Edit provider">⚙</button>
+          <button class="hide-btn row-icon-btn" title="Hide provider" aria-label="Hide provider">✕</button>
+          <button class="prefix-edit-btn row-icon-btn" title="Edit custom prefix">✏️</button>
+          <button class="remove-btn row-icon-btn" hidden title="Remove provider">🗑</button>
         </div>
         <div class="slider-row">
           <input type="range" min="1" max="100" step="1" value="50" aria-label="Detail level">
@@ -1116,6 +1209,11 @@
       removeBtn.setAttribute('aria-label', `Remove ${ch.name}`);
     }
 
+    const editProviderBtn = row.querySelector('.provider-edit-btn');
+    if (editProviderBtn) editProviderBtn.setAttribute('aria-label', `Edit ${ch.name}`);
+    const hideBtn = row.querySelector('.hide-btn');
+    if (hideBtn) hideBtn.setAttribute('aria-label', `Hide ${ch.name}`);
+
     updateReorderButtons(row, index);
     if (ch.isStatic) return;
 
@@ -1197,6 +1295,35 @@
         rebaseModel(ch);
         saveUiPrefs();
         renderLeft();
+        updateTimer();
+      };
+    }
+
+    const providerEditBtn = row.querySelector('.provider-edit-btn');
+    if (providerEditBtn) {
+      providerEditBtn.onclick = (e) => {
+        e.stopPropagation();
+        const ch = row._ch;
+        if (ch) editProviderConfig(ch);
+      };
+    }
+
+    const hideBtn = row.querySelector('.hide-btn');
+    if (hideBtn) {
+      hideBtn.onclick = (e) => {
+        e.stopPropagation();
+        const ch = row._ch;
+        if (!ch) return;
+        // Hide is a UI-only action: the provider file is untouched, so the
+        // model can be restored with "Show hidden".
+        hiddenIds.add(ch.id);
+        ch.checked = false;
+        CH = CH.filter(item => item.id !== ch.id);
+        if (activeTab === ch.id) activeTab = 'hybrid';
+        saveUiPrefs();
+        renderLeft();
+        renderTabs();
+        updateHistory();
         updateTimer();
       };
     }
@@ -1342,8 +1469,26 @@
       leftAddBtn.onclick = addCustomProvider;
     }
 
+    if (!leftRestoreBtn) {
+      leftRestoreBtn = document.createElement('button');
+      leftRestoreBtn.className = 'add-custom-btn electron-only';
+      leftRestoreBtn.onclick = () => {
+        hiddenIds.clear();
+        saveUiPrefs();
+        refreshProviders();
+      };
+    }
+    leftRestoreBtn.textContent = `👁 Show hidden (${hiddenIds.size})`;
+    leftRestoreBtn.hidden = hiddenIds.size === 0;
+
+    const restoreNeeded = hiddenIds.size > 0;
+    const restoreNeedsSlot = restoreNeeded && leftRestoreBtn.parentNode !== list;
+    const restoreNeedsRemoval = !restoreNeeded && leftRestoreBtn.parentNode === list;
+
     const orderKey = CH.map(ch => ch.id).join('\u0000');
-    let orderChanged = orderKey !== leftOrderKey || leftAddBtn.parentNode !== list;
+    let orderChanged = orderKey !== leftOrderKey
+      || leftAddBtn.parentNode !== list
+      || restoreNeedsSlot;
     CH.forEach(ch => {
       const row = leftRows.get(ch.id);
       if (row && row.parentNode !== list) orderChanged = true;
@@ -1355,7 +1500,10 @@
         if (row) list.appendChild(row);
       });
       list.appendChild(leftAddBtn);
+      if (restoreNeeded) list.appendChild(leftRestoreBtn);
       leftOrderKey = orderKey;
+    } else if (restoreNeedsRemoval) {
+      leftRestoreBtn.remove();
     }
 
     renderMiniRail();
@@ -1910,21 +2058,26 @@
   function renderConv() {
     const wrap = document.getElementById('convWrap');
     const depth = parseInt(document.getElementById('hsRange').value, 10) || 0;
-    const path = activePath();
-    const ctxStart = Math.max(0, path.length - depth);
+    // Context/chronology stays root -> leaf; only presentation is reversed.
+    const chronological = activePath();
+    const ctxStart = Math.max(0, chronological.length - depth);
     const seen = new Set();
 
     // The active child of each node, so a forked node can say which branch is shown.
     const nextOnPath = new Map();
-    for (let i = 0; i < path.length - 1; i++) nextOnPath.set(path[i].id, path[i + 1].id);
+    for (let i = 0; i < chronological.length - 1; i++) {
+      nextOnPath.set(chronological[i].id, chronological[i + 1].id);
+    }
 
-    path.forEach((t, idx) => {
+    chronological.forEach((t, idx) => {
       seen.add(t.id);
       let el = turnEls.get(t.id);
       if (!el) {
         el = createTurnEl(t);
         turnEls.set(t.id, el);
       }
+      // idx/ctxStart use chronological order, so T-numbers and the in-context
+      // badge keep meaning and the history slider still counts from the newest.
       updateTurnEl(el, t, idx, idx >= ctxStart, nextOnPath.get(t.id) || null);
     });
 
@@ -1934,7 +2087,9 @@
       turnEls.delete(id);
     });
 
-    const orderKey = JSON.stringify(path.map(t => t.id));
+    // Newest turn at the top of the chat: render the reversed path.
+    const path = chronological.slice().reverse();
+    const orderKey = JSON.stringify(chronological.map(t => t.id));
     let orderChanged = orderKey !== convOrderKey || wrap.children.length !== path.length;
     path.forEach(t => {
       const el = turnEls.get(t.id);
@@ -2232,6 +2387,17 @@
   syncMasterUI();
   setLegendContext('idle');
   refreshProviders();
+
+  // Login Mode must be bound from script scope: `transport` is a const, so an
+  // inline onclick="transport..." cannot see it (which made the button a no-op).
+  const loginBtn = document.getElementById('loginBtn');
+  if (loginBtn) {
+    loginBtn.onclick = () => {
+      if (!transport.startLoginMode) return;
+      const ids = CH.filter(ch => ch.checked && ch.kind === 'scrape').map(ch => ch.id);
+      transport.startLoginMode(ids);
+    };
+  }
 
   // --- ELECTRON APP INTEGRATION ---
 
