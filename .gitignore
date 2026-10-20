@@ -2,4 +2,5 @@ node_modules/
 user_data*
 dist/
 build/
-*.log
+*.logovms.zip
+ovms/

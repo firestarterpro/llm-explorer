@@ -4,8 +4,24 @@ const path = require('path');
 // Utility to generate unique user data dirs
 const getDataDir = (name) => path.join(__dirname, `user_data_${name}`);
 
-// A generic scraper factory to handle the repetitive Playwright logic
-async function genericScrape(config, promptText, event) {
+// Response completion tuning. A provider can override timeoutMs and may supply
+// a doneSelector that is visible while a reply is generating.
+const DEFAULT_RESPONSE_TIMEOUT_MS = 180000;
+const NEW_RESPONSE_POLL_MS = 500;
+const STABLE_POLL_MS = 1000;
+const STABLE_SECONDS = 3;
+
+function cleanResponseText(text) {
+  return String(text || '')
+    .replace(/^```[a-z]*\n/i, '')
+    .replace(/\n```$/i, '');
+}
+
+// A generic scraper factory to handle the repetitive Playwright logic.
+// It returns { id, status, text, ms } and never touches IPC; main.js owns the
+// dispatcher and turns this result into reply-received / hybrid-stream events.
+async function genericScrape(config, promptText) {
+  const startedAt = Date.now();
   let context;
   try {
     context = await chromium.launchPersistentContext(getDataDir(config.id), {
@@ -23,11 +39,20 @@ async function genericScrape(config, promptText, event) {
     // 1. Find the input box
     const input = page.locator(config.inputSelector).first();
     await input.waitFor({ timeout: 15000 });
-    
-    // 2. Type and Submit
+
+    // 2. Snapshot the response list before submitting, so an old reply can
+    // never be mistaken for the new one.
+    const responseLocator = page.locator(config.responseSelector);
+    const responseCountBefore = await responseLocator.count();
+    const configuredTimeout = Number(config.timeoutMs);
+    const responseTimeoutMs = Number.isFinite(configuredTimeout) && configuredTimeout > 0
+      ? configuredTimeout
+      : DEFAULT_RESPONSE_TIMEOUT_MS;
+
+    // 3. Type and Submit
     await input.fill(promptText);
     await page.waitForTimeout(500);
-    
+
     if (config.submitAction === 'enter') {
       await page.keyboard.press('Enter');
     } else {
@@ -35,100 +60,91 @@ async function genericScrape(config, promptText, event) {
     }
 
     console.log(`Waiting for ${config.name} response...`);
-    
-    // 3. Wait for generation to finish (Polling text length)
-    let previousText = "";
-    let stableCount = 0;
-    let attempts = 0;
+    const deadline = Date.now() + responseTimeoutMs;
 
-    while (stableCount < 3 && attempts < 30) {
-      const currentText = await page.locator(config.responseSelector).last().innerText().catch(() => "");
-      
-      if (currentText === previousText && currentText.length > 10) {
+    // 4. Wait for a new response element. Polling avoids a long Playwright
+    // timeout throwing before we can report a partial result.
+    let newResponseAppeared = false;
+    while (Date.now() < deadline) {
+      const currentCount = await responseLocator.count().catch(() => 0);
+      if (currentCount > responseCountBefore) {
+        newResponseAppeared = true;
+        break;
+      }
+      await page.waitForTimeout(NEW_RESPONSE_POLL_MS);
+    }
+
+    if (!newResponseAppeared) {
+      const seconds = Math.round(responseTimeoutMs / 1000);
+      console.warn(`${config.name}: timed out after ${seconds}s waiting for a new response element.`);
+      // Empty text means no usable reply was scraped. main.js turns this into
+      // the user-facing timeout message and keeps it out of synthesis.
+      return { id: config.id, status: 'partial', text: '', ms: Date.now() - startedAt };
+    }
+
+    // 5. A reply is complete when its text is unchanged for three consecutive
+    // seconds, or when the provider's stop/done control has disappeared.
+    let previousText = '';
+    let stableCount = 0;
+    let doneHidden = false;
+
+    while (Date.now() < deadline) {
+      let done = false;
+      if (config.doneSelector) {
+        const doneControl = page.locator(config.doneSelector).first();
+        const doneCount = await doneControl.count().catch(() => 0);
+        done = doneCount === 0 || !(await doneControl.isVisible().catch(() => false));
+      }
+
+      const currentText = await responseLocator.last().innerText().catch(() => '');
+      if (currentText.length > 0 && currentText === previousText) {
         stableCount++;
       } else {
-        stableCount = 0; 
-        previousText = currentText;
+        stableCount = 0;
       }
-      await page.waitForTimeout(1000);
-      attempts++;
+      previousText = currentText;
+
+      if (done && currentText.trim()) {
+        doneHidden = true;
+        break;
+      }
+      if (stableCount >= STABLE_SECONDS) break;
+
+      await page.waitForTimeout(STABLE_POLL_MS);
     }
 
-    if (!previousText || previousText.length < 5) {
-      throw new Error("Timeout waiting for text generation.");
+    const completed = doneHidden || stableCount >= STABLE_SECONDS;
+    const cleanText = cleanResponseText(previousText);
+    const status = completed ? 'success' : 'partial';
+
+    if (status === 'partial') {
+      const seconds = Math.round(responseTimeoutMs / 1000);
+      console.warn(`${config.name}: timed out after ${seconds}s; returning partial text.`);
     }
 
-    // Clean up Markdown code blocks if any
-    previousText = previousText.replace(/^```[a-z]*\n/i, '').replace(/\n```$/i, '');
-
-    event.reply('reply-received', { model: config.id, text: previousText, status: 'success' });
-    return previousText;
+    return {
+      id: config.id,
+      status,
+      text: cleanText,
+      ms: Date.now() - startedAt
+    };
 
   } catch (error) {
     console.error(`${config.name} error:`, error.message);
-    event.reply('reply-received', { model: config.id, text: `Error: ${error.message}`, status: 'error' });
-    return null;
+    return {
+      id: config.id,
+      status: 'error',
+      text: `Error: ${error.message}`,
+      ms: Date.now() - startedAt
+    };
   } finally {
     if (context) await context.close();
   }
 }
 
 // --- EXPORTED SCRAPERS ---
-// Note: These selectors will likely need tweaking tomorrow as websites change daily.
-const providers = {
-  google: {
-    id: 'google', name: 'Google AI', url: 'https://www.google.com/search?udm=50',
-    inputSelector: 'textarea[aria-label="Search"]',
-    submitAction: 'enter', responseSelector: 'div[role="main"]'
-  },
-  brave: {
-    id: 'brave', name: 'Brave', url: 'https://search.brave.com/ask',
-    inputSelector: 'textarea, input[type="text"]',
-    submitAction: 'enter', responseSelector: 'pre, code, .markdown'
-  },
-  chatgpt: {
-    id: 'chatgpt', name: 'ChatGPT', url: 'https://chatgpt.com',
-    inputSelector: '#prompt-textarea',
-    submitAction: 'enter', responseSelector: '.markdown'
-  },
-  claude: {
-    id: 'claude', name: 'Claude', url: 'https://claude.ai/new',
-    inputSelector: 'div[contenteditable="true"]',
-    submitAction: 'enter', responseSelector: '.font-claude-message'
-  },
-  gemini: {
-    id: 'gemini', name: 'Gemini', url: 'https://gemini.google.com/app',
-    inputSelector: 'div.ql-editor, textarea',
-    submitAction: 'enter', responseSelector: 'message-content, .model-response-text'
-  },
-  deepseek: {
-    id: 'deepseek', name: 'DeepSeek', url: 'https://chat.deepseek.com',
-    inputSelector: 'textarea',
-    submitAction: 'enter', responseSelector: 'div.markdown'
-  },
-  grok: {
-    id: 'grok', name: 'Grok', url: 'https://grok.com',
-    inputSelector: 'textarea',
-    submitAction: 'enter', responseSelector: '.message-bubble'
-  },
-  meta: {
-    id: 'meta', name: 'Meta AI', url: 'https://www.meta.ai',
-    inputSelector: 'textarea',
-    submitAction: 'enter', responseSelector: 'div[role="article"]'
-  },
-  copilot: {
-    id: 'copilot', name: 'Copilot', url: 'https://copilot.microsoft.com',
-    inputSelector: 'textarea#userInput, textarea',
-    submitAction: 'enter', responseSelector: 'div[data-content="ai-message"]'
-  },
-  perplexity: {
-    id: 'perplexity', name: 'Perplexity', url: 'https://www.perplexity.ai',
-    inputSelector: 'textarea',
-    submitAction: 'enter', responseSelector: '.prose'
-  }
-};
-
+// Provider configs live in providers.json (built-ins) and userData/providers.json
+// (user-added), loaded by main.js. This module only knows how to run a config.
 module.exports = {
-  scrape: (id, prompt, event) => genericScrape(providers[id], prompt, event),
-  providers
+  scrape: (config, prompt) => genericScrape(config, prompt)
 };

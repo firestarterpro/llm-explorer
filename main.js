@@ -24,9 +24,194 @@ function describeFetchError(error, timeoutMs) {
     : error.message;
 }
 
-// --- SECURE LOCAL SETTINGS ------------------------------------------------
-// DeepSeek keys are encrypted with Electron safeStorage (DPAPI on Windows)
-// and stored in Electron's per-user data directory, never in the repo.
+// Every payload carries the renderer's turnId so a late reply or stream chunk
+// is routed to the turn that asked for it, never "the last turn" (BUG B1).
+function sendStream(event, turnId, chunk) {
+  event.reply('hybrid-stream', { turnId, chunk });
+}
+
+function sendComplete(event, turnId) {
+  event.reply('hybrid-complete', { turnId });
+}
+
+// --- PROVIDER REGISTRY -----------------------------------------------------
+// Built-ins live in the repo's providers.json. Anything the user adds goes to
+// userData/providers.json and is merged on top by id, so adding a site or an
+// API model never requires a code edit.
+const BUILTIN_PROVIDERS_PATH = path.join(__dirname, 'providers.json');
+const PROVIDER_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/i;
+
+function userProvidersPath() {
+  return path.join(app.getPath('userData'), 'providers.json');
+}
+
+function readProviderFile(filePath) {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    const list = Array.isArray(parsed)
+      ? parsed
+      : parsed && Array.isArray(parsed.providers) ? parsed.providers : [];
+    return list.filter(item => item && typeof item === 'object' && item.id);
+  } catch (error) {
+    if (error.code !== 'ENOENT') console.error(`Could not read ${filePath}:`, error.message);
+    return [];
+  }
+}
+
+function writeUserProviders(providers) {
+  fs.mkdirSync(path.dirname(userProvidersPath()), { recursive: true });
+  fs.writeFileSync(userProvidersPath(), JSON.stringify({ version: 1, providers }, null, 2), {
+    encoding: 'utf8',
+    mode: 0o600
+  });
+}
+
+function normalizeProvider(raw, isUser) {
+  const kind = raw.kind === 'api' ? 'api' : 'scrape';
+  return {
+    ...raw,
+    id: String(raw.id).trim(),
+    name: String(raw.name || raw.id).trim(),
+    emoji: typeof raw.emoji === 'string' && raw.emoji ? raw.emoji : (kind === 'api' ? '🧩' : '🌐'),
+    kind,
+    // Search rows (Brave/Google) have no slider. JSON may set it explicitly.
+    isStatic: typeof raw.isStatic === 'boolean' ? raw.isStatic : (kind === 'scrape' && raw.search === true),
+    isUser: !!isUser
+  };
+}
+
+function loadProviders() {
+  const merged = new Map();
+  for (const raw of readProviderFile(BUILTIN_PROVIDERS_PATH)) {
+    const provider = normalizeProvider(raw, false);
+    merged.set(provider.id, provider);
+  }
+  for (const raw of readProviderFile(userProvidersPath())) {
+    const provider = normalizeProvider(raw, true);
+    merged.set(provider.id, provider); // user entries win by id
+  }
+  return [...merged.values()];
+}
+
+function slugifyProviderId(value) {
+  return String(value || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/^[-._]+|[-._]+$/g, '')
+    .slice(0, 64);
+}
+
+function uniqueProviderId(base, taken) {
+  const root = base || 'provider';
+  let id = root;
+  let suffix = 2;
+  while (taken.has(id)) id = `${root}-${suffix++}`;
+  return id;
+}
+
+function assertHttpUrl(value, label) {
+  let url;
+  try {
+    url = new URL(String(value));
+  } catch {
+    throw new Error(`${label} must be a valid http(s) URL.`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`${label} must be a valid http(s) URL.`);
+  }
+  return url.toString();
+}
+
+function addProvider(input) {
+  if (!input || typeof input !== 'object') throw new Error('A provider configuration is required.');
+
+  const userList = readProviderFile(userProvidersPath());
+  const builtinIds = new Set(readProviderFile(BUILTIN_PROVIDERS_PATH).map(item => String(item.id)));
+  const userIds = new Set(userList.map(item => String(item.id)));
+
+  const kind = input.kind === 'api' ? 'api' : 'scrape';
+  const name = String(input.name || '').trim();
+  if (!name) throw new Error('Provider name is required.');
+
+  let id;
+  const requestedId = String(input.id || '').trim();
+  if (requestedId) {
+    if (!PROVIDER_ID_RE.test(requestedId)) {
+      throw new Error('Provider id may only contain letters, numbers, dots, dashes, and underscores.');
+    }
+    if (builtinIds.has(requestedId)) {
+      throw new Error(`"${requestedId}" is a built-in provider id; choose another id.`);
+    }
+    id = requestedId;
+  } else {
+    id = uniqueProviderId(slugifyProviderId(name), new Set([...builtinIds, ...userIds]));
+  }
+
+  const provider = {
+    id,
+    name,
+    emoji: typeof input.emoji === 'string' && input.emoji.trim()
+      ? input.emoji.trim()
+      : (kind === 'api' ? '🧩' : '🌐'),
+    kind
+  };
+
+  if (kind === 'api') {
+    provider.endpoint = assertHttpUrl(input.endpoint, 'Endpoint');
+    provider.modelId = String(input.modelId || '').trim();
+    if (!provider.modelId) throw new Error('Model ID is required for an API provider.');
+    provider.keyRef = String(input.keyRef || `provider:${id}`).trim();
+    provider.isStatic = false;
+  } else {
+    provider.url = assertHttpUrl(input.url, 'Provider URL');
+    provider.inputSelector = String(input.inputSelector || '').trim();
+    provider.responseSelector = String(input.responseSelector || '').trim();
+    if (!provider.inputSelector || !provider.responseSelector) {
+      throw new Error('Website providers need an input selector and a response selector.');
+    }
+    provider.submitAction = input.submitAction === 'button' ? 'button' : 'enter';
+    provider.submitButton = String(input.submitButton || '').trim();
+    if (provider.submitAction === 'button' && !provider.submitButton) {
+      throw new Error('A submit button selector is required when submitAction is "button".');
+    }
+    provider.search = !!input.search;
+    provider.isStatic = typeof input.isStatic === 'boolean' ? input.isStatic : provider.search;
+    provider.doneSelector = String(input.doneSelector || '').trim() || null;
+    const timeout = Number(input.timeoutMs);
+    provider.timeoutMs = Number.isFinite(timeout) && timeout > 0 ? timeout : 180000;
+  }
+
+  // UI defaults can travel with the config so the first render looks right.
+  for (const key of ['checked', 'value', 'prefixType', 'maxTokens', 'tps', 'ttft', 'fidelity']) {
+    if (input[key] !== undefined) provider[key] = input[key];
+  }
+
+  // Keys never go in a provider file; they belong in the encrypted store.
+  delete provider.apiKey;
+
+  writeUserProviders([...userList.filter(item => String(item.id) !== id), provider]);
+  return { ok: true, provider: normalizeProvider(provider, true) };
+}
+
+function removeProvider(id) {
+  const targetId = String(id || '');
+  const userList = readProviderFile(userProvidersPath());
+  const target = userList.find(item => String(item.id) === targetId);
+  if (!target) return { ok: false, error: 'That provider is built-in or does not exist.' };
+
+  writeUserProviders(userList.filter(item => String(item.id) !== targetId));
+
+  // Auto-generated refs belong to this provider; don't leave an orphan key.
+  const keyRef = String(target.keyRef || '');
+  if (keyRef.startsWith('provider:')) removeKey(keyRef);
+  return { ok: true };
+}
+
+// --- SECURE KEY STORE ------------------------------------------------------
+// Keys are encrypted with Electron safeStorage (DPAPI on Windows) and kept in
+// userData/settings.json under keys[ref]. The renderer can write a key and ask
+// whether one exists; there is deliberately no getter over IPC.
 function settingsPath() {
   return path.join(app.getPath('userData'), 'settings.json');
 }
@@ -48,29 +233,82 @@ function saveSettings(settings) {
   });
 }
 
-function getDeepSeekApiKey() {
-  if (process.env.DEEPSEEK_API_KEY) return process.env.DEEPSEEK_API_KEY.trim();
-  const settings = loadSettings();
-  if (!settings.deepseekApiKeyEnc || !safeStorage.isEncryptionAvailable()) return '';
+function keyEnvName(ref) {
+  return `LLMX_KEY_${String(ref).toUpperCase().replace(/[^A-Z0-9]+/g, '_')}`;
+}
+
+function keyFromEnvironment(ref) {
+  const value = process.env[keyEnvName(ref)];
+  if (value && value.trim()) return value.trim();
+  // DeepSeek keeps its Phase 1 environment name.
+  if (String(ref).toLowerCase() === 'deepseek' && process.env.DEEPSEEK_API_KEY) {
+    return process.env.DEEPSEEK_API_KEY.trim();
+  }
+  return '';
+}
+
+function encryptedKeyFor(settings, ref) {
+  if (settings.keys && typeof settings.keys === 'object' && settings.keys[ref]) {
+    return settings.keys[ref];
+  }
+  // Read the pre-registry DeepSeek field until the next setKey migrates it.
+  if (ref === 'deepseek' && settings.deepseekApiKeyEnc) return settings.deepseekApiKeyEnc;
+  return '';
+}
+
+function decryptKey(encoded, ref) {
+  if (!encoded || !safeStorage.isEncryptionAvailable()) return '';
   try {
-    return safeStorage.decryptString(Buffer.from(settings.deepseekApiKeyEnc, 'base64')).trim();
+    return safeStorage.decryptString(Buffer.from(encoded, 'base64')).trim();
   } catch (error) {
-    console.error('Could not decrypt the stored DeepSeek API key:', error.message);
+    console.error(`Could not decrypt the stored key for "${ref}":`, error.message);
     return '';
   }
 }
 
-function setDeepSeekApiKey(key) {
+function getKey(ref) {
+  const envKey = keyFromEnvironment(ref);
+  if (envKey) return envKey;
+  return decryptKey(encryptedKeyFor(loadSettings(), ref), ref);
+}
+
+function hasKey(ref) {
+  return !!getKey(ref);
+}
+
+function keySource(ref) {
+  if (keyFromEnvironment(ref)) return 'environment';
+  return encryptedKeyFor(loadSettings(), ref) ? 'settings' : 'none';
+}
+
+function setKey(ref, key) {
+  const name = String(ref || '').trim();
+  if (!name) return { ok: false, error: 'A key reference is required.' };
+  const value = String(key || '').trim();
+  if (!value) return { ok: false, error: 'API key cannot be empty.' };
+
   if (!safeStorage.isEncryptionAvailable()) {
     return {
       ok: false,
-      error: 'OS encryption is unavailable. Set DEEPSEEK_API_KEY in the environment instead.'
+      error: `OS encryption is unavailable. Set ${keyEnvName(name)} in the environment instead.`
     };
   }
+
   const settings = loadSettings();
-  settings.deepseekApiKeyEnc = safeStorage.encryptString(key).toString('base64');
+  if (!settings.keys || typeof settings.keys !== 'object' || Array.isArray(settings.keys)) {
+    settings.keys = {};
+  }
+  settings.keys[name] = safeStorage.encryptString(value).toString('base64');
+  if (name === 'deepseek') delete settings.deepseekApiKeyEnc;
   saveSettings(settings);
   return { ok: true };
+}
+
+function removeKey(ref) {
+  const settings = loadSettings();
+  if (!settings.keys || !settings.keys[ref]) return;
+  delete settings.keys[ref];
+  saveSettings(settings);
 }
 
 function createWindow() {
@@ -89,36 +327,38 @@ function createWindow() {
 // --- QUEUE SYSTEM (Max 3 concurrent browsers to prevent RAM crash) ---
 async function runConcurrent(tasks, limit = 3) {
   const executing = new Set();
+  const all = [];
   for (const task of tasks) {
     const p = Promise.resolve().then(() => task());
     executing.add(p);
+    all.push(p);
     const clean = () => executing.delete(p);
     p.then(clean, clean);
     if (executing.size >= limit) {
       await Promise.race(executing);
     }
   }
-  return Promise.allSettled(executing);
+  return Promise.allSettled(all);
 }
 
 // --- PYTHON SYNTHESIZER ---
-function runSynthesizer(responses, event) {
+function runSynthesizer(responses, event, turnId) {
   const validResponses = responses.filter(Boolean);
   if (validResponses.length === 0) {
-    event.reply('hybrid-stream', '\n[No responses were scraped successfully. Cannot synthesize.]\n');
-    event.reply('hybrid-complete');
+    sendStream(event, turnId, '\n[No responses were scraped successfully. Cannot synthesize.]\n');
+    sendComplete(event, turnId);
     return;
   }
 
   if (!fs.existsSync(PYTHON_EXE) || !fs.existsSync(PYTHON_SCRIPT_PATH)) {
-    event.reply('hybrid-stream',
+    sendStream(event, turnId,
       '\n[Local GPU synthesis is unavailable: Python or synthesize.py was not found. Switch the engine to Cloud API.]\n');
-    event.reply('hybrid-complete');
+    sendComplete(event, turnId);
     return;
   }
 
   console.log(`Passing ${validResponses.length} responses to OpenVINO...`);
-  event.reply('hybrid-stream', '\n[Running local OpenVINO synthesis...]\n');
+  sendStream(event, turnId, '\n[Running local OpenVINO synthesis...]\n');
 
   const inputData = validResponses.join('\n---END---\n');
   const pyProcess = spawn(PYTHON_EXE, [PYTHON_SCRIPT_PATH], { windowsHide: true });
@@ -132,8 +372,8 @@ function runSynthesizer(responses, event) {
     finished = true;
     clearTimeout(killTimer);
     activeChildren.delete(pyProcess);
-    if (message) event.reply('hybrid-stream', message);
-    event.reply('hybrid-complete');
+    if (message) sendStream(event, turnId, message);
+    sendComplete(event, turnId);
   };
 
   killTimer = setTimeout(() => {
@@ -154,7 +394,7 @@ function runSynthesizer(responses, event) {
   // Decode as a stream so multi-byte characters split across chunks stay intact.
   pyProcess.stdout.setEncoding('utf8');
   pyProcess.stdout.on('data', (data) => {
-    if (!finished) event.reply('hybrid-stream', data);
+    if (!finished) sendStream(event, turnId, data);
   });
   pyProcess.stderr.on('data', (data) => console.error(`Python Error: ${data}`));
 
@@ -164,17 +404,24 @@ function runSynthesizer(responses, event) {
 }
 
 // --- CUSTOM API MODELS ----------------------------------------------------
-// Custom models bypass Playwright and call their configured endpoint directly.
-async function runCustomModel(model, promptText, event) {
+// API providers bypass Playwright and call their configured endpoint directly.
+// The key is read from the encrypted store at call time, never from the renderer.
+// Returns { id, status, text, ms }; the dispatcher emits IPC.
+async function runCustomModel(model, promptText) {
+  const startedAt = Date.now();
   try {
+    const modelId = String(model.modelId || '').trim();
+    if (!modelId) throw new Error('No model ID configured for this custom LLM.');
+
     const headers = { 'Content-Type': 'application/json' };
-    if (model.apiKey) headers.Authorization = `Bearer ${model.apiKey}`;
+    const apiKey = model.keyRef ? getKey(model.keyRef) : '';
+    if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
 
     const response = await fetch(model.endpoint, {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: model.name,
+        model: modelId,
         messages: [{ role: 'user', content: promptText }],
         stream: false
       }),
@@ -196,17 +443,16 @@ async function runCustomModel(model, promptText, event) {
     const text = extractModelText(data).trim();
     if (!text) throw new Error('The endpoint returned no text.');
 
-    event.reply('reply-received', { model: model.id, text, status: 'success' });
-    return text;
+    return { id: model.id, status: 'success', text, ms: Date.now() - startedAt };
   } catch (error) {
     const message = describeFetchError(error, CUSTOM_MODEL_TIMEOUT_MS);
     console.error(`Custom model "${model.name}" error:`, message);
-    event.reply('reply-received', {
-      model: model.id,
+    return {
+      id: model.id,
+      status: 'error',
       text: `Error: ${message}`,
-      status: 'error'
-    });
-    return null;
+      ms: Date.now() - startedAt
+    };
   }
 }
 
@@ -234,23 +480,23 @@ function buildSynthesisPrompt(responses) {
   ].join('\n');
 }
 
-async function runDeepSeekSynthesis(responses, event) {
+async function runDeepSeekSynthesis(responses, event, turnId) {
   const validResponses = responses.filter(Boolean);
   if (validResponses.length === 0) {
-    event.reply('hybrid-stream', '\n[No responses were collected. Cannot synthesize.]\n');
-    event.reply('hybrid-complete');
+    sendStream(event, turnId, '\n[No responses were collected. Cannot synthesize.]\n');
+    sendComplete(event, turnId);
     return;
   }
 
-  const apiKey = getDeepSeekApiKey();
+  const apiKey = getKey('deepseek');
   if (!apiKey) {
-    event.reply('hybrid-stream',
+    sendStream(event, turnId,
       '\n[DeepSeek API key is not configured. Click Settings or set DEEPSEEK_API_KEY.]\n');
-    event.reply('hybrid-complete');
+    sendComplete(event, turnId);
     return;
   }
 
-  event.reply('hybrid-stream', '\n[Cloud API synthesis via DeepSeek...]\n');
+  sendStream(event, turnId, '\n[Cloud API synthesis via DeepSeek...]\n');
 
   try {
     const response = await fetch(DEEPSEEK_API_URL, {
@@ -281,7 +527,7 @@ async function runDeepSeekSynthesis(responses, event) {
       const data = await response.json();
       const text = extractModelText(data);
       if (!text) throw new Error('DeepSeek returned no text.');
-      event.reply('hybrid-stream', text);
+      sendStream(event, turnId, text);
       return;
     }
 
@@ -305,7 +551,7 @@ async function runDeepSeekSynthesis(responses, event) {
           data.choices[0].delta && data.choices[0].delta.content;
         if (delta) {
           sawContent = true;
-          event.reply('hybrid-stream', delta);
+          sendStream(event, turnId, delta);
         }
       } catch {
         // Ignore keep-alives or partial/non-JSON SSE lines.
@@ -330,92 +576,192 @@ async function runDeepSeekSynthesis(responses, event) {
   } catch (error) {
     const message = describeFetchError(error, DEEPSEEK_TIMEOUT_MS);
     console.error('DeepSeek synthesis error:', message);
-    event.reply('hybrid-stream', `\n[DeepSeek API error: ${message}]\n`);
+    sendStream(event, turnId, `\n[DeepSeek API error: ${message}]\n`);
   } finally {
-    event.reply('hybrid-complete');
+    sendComplete(event, turnId);
   }
 }
 
-function runSynthesis(responses, event, engine) {
+function runSynthesis(responses, event, engine, turnId) {
   const useCloud = String(engine || '').toLowerCase().includes('cloud');
   return useCloud
-    ? runDeepSeekSynthesis(responses, event)
-    : runSynthesizer(responses, event);
+    ? runDeepSeekSynthesis(responses, event, turnId)
+    : runSynthesizer(responses, event, turnId);
+}
+
+// Every adapter has the same shape: (config, prompt) -> { id, status, text, ms }.
+// Adapters never touch IPC; the dispatcher owns that. New kinds are one entry
+// here, not edits to the user-prompt handler.
+const providerAdapters = {
+  scrape: (config, promptText) => scrapers.scrape(config, promptText),
+  api: (config, promptText) => runCustomModel(config, promptText)
+};
+
+function normalizeProviderResult(config, raw) {
+  const result = raw && typeof raw === 'object'
+    ? raw
+    : { id: config.id, status: raw ? 'success' : 'error', text: typeof raw === 'string' ? raw : '', ms: 0 };
+
+  const status = ['success', 'partial', 'error'].includes(result.status) ? result.status : 'error';
+  let text = typeof result.text === 'string' ? result.text : '';
+
+  // A partial result with no text means the reply element never appeared.
+  if (!text && status !== 'success') {
+    const seconds = Math.max(1, Math.round((Number(result.ms) || 0) / 1000));
+    text = status === 'error'
+      ? 'Error: the provider returned no text.'
+      : `Partial response: no reply appeared after ${seconds}s.`;
+  }
+
+  return {
+    id: result.id || config.id,
+    status,
+    text,
+    ms: Number(result.ms) || 0
+  };
+}
+
+// Dispatcher: call the adapter, normalize what it returns, then emit IPC. Success
+// text goes to the model's own card; non-success results also reach the hybrid log.
+async function runProvider(config, promptText, event, turnId) {
+  const adapter = providerAdapters[config.kind] || providerAdapters.scrape;
+  let result;
+
+  try {
+    result = normalizeProviderResult(config, await adapter(config, promptText));
+  } catch (error) {
+    result = normalizeProviderResult(config, {
+      id: config.id,
+      status: 'error',
+      text: `Error: ${error.message}`,
+      ms: 0
+    });
+  }
+
+  event.reply('reply-received', {
+    turnId,
+    model: result.id,
+    text: result.text,
+    status: result.status,
+    ms: result.ms
+  });
+  if (result.status !== 'success') {
+    sendStream(event, turnId, `\n[${config.name}: ${result.text}]\n`);
+  }
+
+  return result;
 }
 
 app.whenReady().then(() => {
   createWindow();
 
   // 1. Handle Chat Prompts
-  // activeModels: IDs selected in the left panel.
-  // engine: value from #engineToggle ('Local GPU' or 'Cloud').
-  // customModels: full configs for type:'custom' entries, which skip Playwright.
-  ipcMain.on('user-prompt', async (event, promptText, activeModels = [], engine = 'Local GPU', customModels = []) => {
-    if (!Array.isArray(activeModels) || activeModels.length === 0) {
-      event.reply('hybrid-stream', '\n[Please select at least one model.]\n');
-      event.reply('hybrid-complete');
+  // payload: { turnId, promptText, activeModels, engine }.
+  // Configs, and any API keys, are resolved in main from the registry.
+  ipcMain.on('user-prompt', async (event, payload = {}) => {
+    const { turnId, promptText = '', activeModels = [], engine = 'Local GPU' } = payload || {};
+
+    // Without an id the renderer cannot route the replies, so refuse rather
+    // than fall back to "the last turn".
+    if (!turnId) {
+      console.warn('Ignoring a prompt without a turnId.');
       return;
     }
 
-    const customById = new Map(
-      (Array.isArray(customModels) ? customModels : [])
-        .filter(model => model && model.id && model.endpoint)
-        .map(model => [String(model.id), model])
-    );
+    if (!Array.isArray(activeModels) || activeModels.length === 0) {
+      sendStream(event, turnId, '\n[Please select at least one model.]\n');
+      sendComplete(event, turnId);
+      return;
+    }
+
+    const byId = new Map(loadProviders().map(provider => [provider.id, provider]));
 
     // Set UI to loading
     activeModels.forEach(id => {
-      event.reply('reply-received', { model: id, text: 'Scraping...', status: 'loading' });
+      event.reply('reply-received', { turnId, model: id, text: 'Scraping...', status: 'loading', ms: 0 });
     });
 
-    // Built-in models use Playwright; custom models use their API endpoint.
+    // Each id is dispatched through the registry: scrape -> Playwright, api -> fetch.
     const tasks = activeModels
       .map(id => {
-        const custom = customById.get(String(id));
-        if (custom) return () => runCustomModel(custom, promptText, event);
-        if (scrapers.providers[id]) return () => scrapers.scrape(id, promptText, event);
-        event.reply('reply-received', {
-          model: id,
-          text: `Error: unknown model "${id}"`,
-          status: 'error'
-        });
-        return null;
+        const config = byId.get(String(id));
+        if (!config) {
+          event.reply('reply-received', {
+            turnId,
+            model: id,
+            text: `Error: unknown model "${id}"`,
+            status: 'error',
+            ms: 0
+          });
+          return null;
+        }
+        return () => runProvider(config, promptText, event, turnId);
       })
       .filter(Boolean);
 
     // Run max 3 at a time
     const results = await runConcurrent(tasks, 3);
 
-    // Extract successful text responses
+    // Synthesis gets usable answer text. Empty partials (reply never appeared)
+    // and errors stay out.
     const textResponses = results
-      .filter(r => r.status === 'fulfilled' && r.value)
-      .map(r => r.value);
+      .filter(r => r.status === 'fulfilled' && r.value && r.value.text && r.value.status !== 'error')
+      .map(r => r.value.text);
 
-    runSynthesis(textResponses, event, engine);
+    runSynthesis(textResponses, event, engine, turnId);
   });
 
-  // 2. Secure DeepSeek settings (the key itself never returns to the renderer)
-  ipcMain.handle('settings:deepseek-status', () => ({
-    configured: !!getDeepSeekApiKey(),
-    source: process.env.DEEPSEEK_API_KEY ? 'environment' : 'settings'
-  }));
+  // 2. Provider registry. User entries live in userData/providers.json.
+  ipcMain.handle('providers:list', () => loadProviders());
 
-  ipcMain.handle('settings:set-deepseek-key', (event, key) => {
-    const trimmed = String(key || '').trim();
-    if (!trimmed) return { ok: false, error: 'API key cannot be empty.' };
+  ipcMain.handle('providers:add', (event, cfg) => {
     try {
-      return setDeepSeekApiKey(trimmed);
+      return addProvider(cfg);
     } catch (error) {
       return { ok: false, error: error.message };
     }
   });
 
-  // 3. Handle Login Mode
+  ipcMain.handle('providers:remove', (event, id) => {
+    try {
+      return removeProvider(id);
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  // 3. Encrypted key store. No IPC path returns a key to the renderer.
+  ipcMain.handle('keys:set', (event, ref, key) => {
+    try {
+      return setKey(ref, key);
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle('keys:has', (event, ref) => hasKey(ref));
+
+  // Legacy DeepSeek handlers, now thin aliases over the generic store.
+  ipcMain.handle('settings:deepseek-status', () => ({
+    configured: hasKey('deepseek'),
+    source: keySource('deepseek')
+  }));
+
+  ipcMain.handle('settings:set-deepseek-key', (event, key) => {
+    try {
+      return setKey('deepseek', key);
+    } catch (error) {
+      return { ok: false, error: error.message };
+    }
+  });
+
+  // 4. Handle Login Mode
   ipcMain.on('login-mode', async (event) => {
     console.log("Starting Login Mode. Please log into the windows that open.");
     
-    // Sequentially open each provider so RAM doesn't blow up
-    for (const [id, config] of Object.entries(scrapers.providers)) {
+    // Sequentially open each website provider so RAM doesn't blow up
+    for (const config of loadProviders().filter(provider => provider.kind === 'scrape')) {
+      const id = config.id;
       try {
         const context = await chromium.launchPersistentContext(path.join(__dirname, `user_data_${id}`), {
           headless: false,

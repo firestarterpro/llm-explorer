@@ -86,6 +86,12 @@
   .lock-btn.on { opacity:1; border-color:var(--accent);
     filter:drop-shadow(0 0 4px var(--accent)); color:#fff; }
 
+  .remove-btn { background:transparent; border:1px solid transparent;
+    color:var(--muted); cursor:pointer; padding:2px 6px;
+    border-radius:4px; font-size:13px; opacity:.4; line-height:1;
+    transition:all .15s ease; }
+  .remove-btn:hover { background:rgba(255,107,107,.12); opacity:1; color:#ff6b6b; }
+
   .trio-toggle { display:flex; align-items:center; gap:8px; padding:10px 12px;
     background:var(--panel-2); border:1px solid var(--border);
     border-radius:var(--radius); cursor:pointer; font-size:15px; user-select:none; }
@@ -297,6 +303,40 @@
     color:var(--purple); border:1px solid var(--purple); border-radius:4px;
     padding:1px 4px; line-height:1.2; text-transform:uppercase; }
 
+  /* ---- Shared modal (window.prompt replacement) ---- */
+  .app-modal { position:fixed; inset:0; z-index:1000; display:flex;
+    align-items:center; justify-content:center; padding:20px;
+    background:rgba(0,0,0,.65); }
+  .app-modal[hidden] { display:none; }
+  .app-modal-panel { width:min(520px, 100%); background:var(--panel-2);
+    border:1px solid var(--accent); border-radius:12px; padding:22px;
+    box-shadow:0 18px 60px rgba(0,0,0,.75); }
+  .app-modal-panel h2 { margin:0 0 8px; color:var(--accent); font-size:22px; }
+  .app-modal-message { color:var(--muted); font-size:15px; line-height:1.5;
+    margin-bottom:16px; }
+  .app-modal-tabs { display:flex; gap:6px; margin-bottom:14px;
+    border-bottom:1px solid var(--border); }
+  .app-modal-tabs[hidden] { display:none; }
+  .app-modal-tab { background:transparent; border:1px solid transparent;
+    border-bottom:none; border-radius:6px 6px 0 0; color:var(--muted);
+    padding:7px 12px; font-size:14px; line-height:1.2; margin-bottom:-1px; }
+  .app-modal-tab:hover { color:var(--text); border-color:var(--border); }
+  .app-modal-tab.active { color:var(--accent); background:var(--bg);
+    border-color:var(--border); border-bottom-color:var(--bg); }
+  .app-modal-fields { display:flex; flex-direction:column; gap:12px; }
+  .app-modal-field { display:flex; flex-direction:column; gap:5px; }
+  .app-modal-field label { color:var(--muted); font-size:13px;
+    letter-spacing:.05em; text-transform:uppercase; }
+  .app-modal-field input { width:100%; background:var(--bg); color:var(--text);
+    border:1px solid var(--border); border-radius:6px; padding:9px 10px;
+    font:inherit; font-size:16px; outline:none; }
+  .app-modal-field input:focus { border-color:var(--accent); }
+  .app-modal-error { color:var(--red); font-size:14px; margin-top:12px; }
+  .app-modal-error[hidden] { display:none; }
+  .app-modal-actions { display:flex; justify-content:flex-end; gap:8px;
+    margin-top:18px; }
+  .app-modal-actions .modal-btn { padding:8px 16px; font-size:15px; }
+
   .statusbar { display:flex; gap:12px; padding:8px 10px; font-size:15px;
     background:#0b0d11; border:1px solid var(--border); border-radius:6px;
     font-variant-numeric:tabular-nums; min-height:32px; align-items:center; }
@@ -414,6 +454,22 @@
     </div>
   </div>
 </div>
+<!-- Shared modal: Electron has no working window.prompt(). -->
+<div class="app-modal" id="appModal" hidden>
+  <div class="app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="appModalTitle">
+    <h2 id="appModalTitle"></h2>
+    <div class="app-modal-message" id="appModalMessage"></div>
+    <div class="app-modal-tabs" id="appModalTabs" role="tablist" hidden></div>
+    <div class="app-modal-fields" id="appModalFields"></div>
+    <div class="app-modal-error" id="appModalError" hidden></div>
+    <div class="app-modal-actions">
+      <button type="button" class="modal-btn secondary" id="appModalCancel">Cancel</button>
+      <button type="button" class="modal-btn primary" id="appModalSave">Save</button>
+    </div>
+  </div>
+</div>
+
+
 
 <script>
   // --- PREFIX PRESETS ---
@@ -423,19 +479,124 @@
     'ELI5': "Explain like I'm 5 years old. Use simple language and relatable analogies."
   };
 
-  // --- MODEL CHANNELS CONFIGURATION ---
-  const CH = [
-    { id:'brave',      emoji:'🦁', name:'Brave',      checked:true,  isStatic:true,  tps:100, ttft:0.5 },
-    { id:'google',     emoji:'🔍', name:'Google AI',  checked:true,  isStatic:true,  tps:100, ttft:0.5 },
-    { id:'chatgpt',    emoji:'🤖', name:'ChatGPT',    checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Concise',  customPrefix:'', prefix:PREFIX_PRESETS['Concise'],  tps:80,  ttft:0.4 },
-    { id:'claude',     emoji:'🎭', name:'Claude',     checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Concise',  customPrefix:'', prefix:PREFIX_PRESETS['Concise'],  tps:75,  ttft:0.4 },
-    { id:'gemini',     emoji:'♊', name:'Gemini',     checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Detailed', customPrefix:'', prefix:PREFIX_PRESETS['Detailed'], tps:195, ttft:0.5 },
-    { id:'deepseek',   emoji:'🌊', name:'DeepSeek',   checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Detailed', customPrefix:'', prefix:PREFIX_PRESETS['Detailed'], tps:110, ttft:0.4 },
-    { id:'grok',       emoji:'🌌', name:'Grok',       checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Concise',  customPrefix:'', prefix:PREFIX_PRESETS['Concise'],  tps:90,  ttft:0.5 },
-    { id:'meta',       emoji:'💠', name:'Meta AI',    checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Concise',  customPrefix:'', prefix:PREFIX_PRESETS['Concise'],  tps:85,  ttft:0.5 },
-    { id:'copilot',    emoji:'🛩️', name:'Copilot',    checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Detailed', customPrefix:'', prefix:PREFIX_PRESETS['Detailed'], tps:70,  ttft:0.6 },
-    { id:'perplexity', emoji:'🔭', name:'Perplexity', checked:false, isStatic:false, value:50, baseValue:50, locked:false, prefixType:'Detailed', customPrefix:'', prefix:PREFIX_PRESETS['Detailed'], tps:60,  ttft:0.8 }
-  ];
+  // --- MODEL CHANNELS (from the main-process provider registry) ---
+  // The list comes from window.api.getProviders() at startup, merged with the
+  // user's UI preferences. API keys never enter this state.
+  let CH = [];
+  const UI_PREFS_KEY = 'llmx.uiPrefs.v1';
+
+  function loadUiPrefs() {
+    try {
+      const parsed = JSON.parse(localStorage.getItem(UI_PREFS_KEY) || '{}');
+      return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function saveUiPrefs() {
+    try {
+      const channels = {};
+      CH.forEach(ch => {
+        channels[ch.id] = {
+          checked: !!ch.checked,
+          value: ch.value,
+          baseValue: ch.baseValue,
+          locked: !!ch.locked,
+          lockedValue: ch.lockedValue ?? null,
+          prefixType: ch.prefixType || 'Concise',
+          customPrefix: ch.customPrefix || '',
+          maxTokens: ch.maxTokens,
+          fidelity: !!ch.fidelity
+        };
+      });
+      localStorage.setItem(UI_PREFS_KEY, JSON.stringify({
+        version: 1,
+        order: CH.map(ch => ch.id),
+        channels
+      }));
+    } catch {
+      // Preference persistence is best-effort; never block the UI on storage.
+    }
+  }
+
+  function forgetChannelPrefs(id) {
+    const prefs = loadUiPrefs();
+    if (prefs.channels) delete prefs.channels[id];
+    if (Array.isArray(prefs.order)) prefs.order = prefs.order.filter(item => item !== id);
+    try {
+      localStorage.setItem(UI_PREFS_KEY, JSON.stringify(prefs));
+    } catch {
+      // Ignore storage failures.
+    }
+  }
+
+  function buildChannels(providers, prefs) {
+    const prefsData = prefs && typeof prefs === 'object' ? prefs : {};
+    const savedChannels = prefsData.channels && typeof prefsData.channels === 'object'
+      ? prefsData.channels
+      : {};
+    const byId = new Map(providers.map(provider => [provider.id, provider]));
+
+    // Saved drag order first, then providers added since the last launch.
+    const order = [];
+    (Array.isArray(prefsData.order) ? prefsData.order : []).forEach(id => {
+      if (byId.has(id) && !order.includes(id)) order.push(id);
+    });
+    providers.forEach(provider => {
+      if (!order.includes(provider.id)) order.push(provider.id);
+    });
+
+    return order.map(id => {
+      const provider = byId.get(id);
+      const saved = savedChannels[id] || {};
+      const isApi = provider.kind === 'api';
+      const prefixType = saved.prefixType || provider.prefixType || 'Concise';
+      const value = clamp(Number(saved.value ?? provider.value ?? 50), 1, 100);
+
+      const channel = {
+        id,
+        name: provider.name || id,
+        emoji: provider.emoji || (isApi ? '🧩' : '🌐'),
+        kind: provider.kind || 'scrape',
+        isStatic: !!provider.isStatic,
+        isUser: !!provider.isUser,
+        endpoint: provider.endpoint || '',
+        modelId: provider.modelId || '',
+        keyRef: provider.keyRef || '',
+        checked: saved.checked ?? provider.checked ?? false,
+        value,
+        baseValue: clamp(Number(saved.baseValue ?? value), 1, 100),
+        locked: saved.locked ?? false,
+        lockedValue: saved.lockedValue ?? null,
+        prefixType,
+        customPrefix: saved.customPrefix ?? '',
+        maxTokens: saved.maxTokens ?? provider.maxTokens ?? 1000,
+        fidelity: saved.fidelity ?? !!provider.fidelity,
+        tps: Number(provider.tps) || 80,
+        ttft: Number(provider.ttft) || 0.5
+      };
+      channel.prefix = getPrefixText(channel);
+      return channel;
+    });
+  }
+
+  async function refreshProviders() {
+    let providers = [];
+    if (window.api?.getProviders) {
+      try {
+        const list = await window.api.getProviders();
+        if (Array.isArray(list)) providers = list;
+      } catch (error) {
+        console.error('Could not load provider registry:', error);
+      }
+    }
+    CH = buildChannels(providers, loadUiPrefs());
+    renderLeft();
+    updateHistory();
+    updateTimer();
+  }
+
   const HYB = '🪟';
 
   // Helper: Escape user-entered strings used in innerHTML
@@ -453,57 +614,288 @@
     return PREFIX_PRESETS[ch.prefixType] || PREFIX_PRESETS['Concise'];
   }
 
-  // --- CUSTOM API MODELS ---
-  let customModelSeq = 0;
-  function addCustomModel() {
-    const nameInput = prompt('Custom LLM name:', '');
-    if (nameInput === null) return;
-    const name = nameInput.trim();
-    if (!name) {
-      alert('A name is required.');
-      return;
-    }
+  // --- SHARED INPUT MODAL ---
+  // Electron's renderer does not implement window.prompt(), so every text
+  // prompt goes through this one in-page form.
+  // With `tabs`, each tab has its own fields and validation, and the promise
+  // resolves to { tab, values } so the caller knows which form was submitted.
+  function showAppModal({ title, message = '', fields = [], tabs = null, confirmLabel = 'Save', validate }) {
+    const overlay = document.getElementById('appModal');
+    const titleEl = document.getElementById('appModalTitle');
+    const messageEl = document.getElementById('appModalMessage');
+    const tabsEl = document.getElementById('appModalTabs');
+    const fieldsEl = document.getElementById('appModalFields');
+    const errorEl = document.getElementById('appModalError');
+    const cancelBtn = document.getElementById('appModalCancel');
+    const saveBtn = document.getElementById('appModalSave');
+    const previousFocus = document.activeElement;
+    const tabList = Array.isArray(tabs) && tabs.length > 0 ? tabs : null;
 
-    const endpointInput = prompt(
-      'Endpoint URL (OpenAI-compatible /chat/completions):',
-      'https://'
-    );
-    if (endpointInput === null) return;
-    const endpoint = endpointInput.trim();
-    try {
-      const url = new URL(endpoint);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
-    } catch {
-      alert('Enter a valid http(s) endpoint URL.');
-      return;
-    }
+    return new Promise(resolve => {
+      let inputs = {};
+      let activeTab = tabList ? tabList[0].id : null;
+      const drafts = {};
 
-    const apiKeyInput = prompt('API key (leave blank if not required):', '');
-    if (apiKeyInput === null) return;
+      titleEl.textContent = title;
+      messageEl.textContent = message;
+      messageEl.hidden = !message;
+      tabsEl.innerHTML = '';
+      tabsEl.hidden = !tabList;
+      fieldsEl.innerHTML = '';
+      errorEl.textContent = '';
+      errorEl.hidden = true;
+      saveBtn.textContent = confirmLabel;
 
-    const id = `custom-${Date.now().toString(36)}-${customModelSeq++}`;
-    CH.push({
-      id,
-      emoji: '🧩',
-      name,
-      type: 'custom',
-      endpoint,
-      apiKey: apiKeyInput.trim(),
-      checked: true,
-      isStatic: false,
-      value: 50,
-      baseValue: 50,
-      locked: false,
-      lockedValue: null,
-      prefixType: 'Concise',
-      customPrefix: '',
-      prefix: PREFIX_PRESETS['Concise'],
-      tps: 120,
-      ttft: 0.5
+      const currentTab = () => (tabList ? tabList.find(tab => tab.id === activeTab) : null);
+      const currentFields = () => (currentTab() ? currentTab().fields : fields);
+
+      const readInputs = () => {
+        const values = {};
+        for (const [name, input] of Object.entries(inputs)) values[name] = input.value;
+        return values;
+      };
+
+      const renderTabs = () => {
+        if (!tabList) return;
+        tabsEl.innerHTML = '';
+        tabList.forEach(tab => {
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'app-modal-tab' + (tab.id === activeTab ? ' active' : '');
+          button.textContent = tab.label;
+          button.setAttribute('role', 'tab');
+          button.setAttribute('aria-selected', String(tab.id === activeTab));
+          button.onclick = () => switchTab(tab.id);
+          tabsEl.appendChild(button);
+        });
+      };
+
+      const renderFields = () => {
+        fieldsEl.innerHTML = '';
+        inputs = {};
+        const draft = drafts[activeTab || ''] || {};
+
+        currentFields().forEach((field, index) => {
+          const wrap = document.createElement('div');
+          wrap.className = 'app-modal-field';
+
+          const label = document.createElement('label');
+          label.textContent = field.label;
+          label.htmlFor = `appModalField${index}`;
+
+          const input = document.createElement('input');
+          input.id = label.htmlFor;
+          input.name = field.name;
+          input.type = field.type || 'text';
+          input.value = draft[field.name] ?? field.value ?? '';
+          input.placeholder = field.placeholder || '';
+          input.autocomplete = field.autocomplete || 'off';
+          input.dataset.required = field.required ? '1' : '';
+          input.dataset.label = field.label;
+
+          wrap.append(label, input);
+          fieldsEl.appendChild(wrap);
+          inputs[field.name] = input;
+        });
+      };
+
+      const focusFirstInput = () => {
+        const firstInput = fieldsEl.querySelector('input');
+        if (firstInput) {
+          firstInput.focus();
+          firstInput.select();
+        } else {
+          saveBtn.focus();
+        }
+      };
+
+      const switchTab = tabId => {
+        if (tabId === activeTab) return;
+        drafts[activeTab] = readInputs();
+        activeTab = tabId;
+        errorEl.textContent = '';
+        errorEl.hidden = true;
+        renderTabs();
+        renderFields();
+        focusFirstInput();
+      };
+
+      const removeListeners = () => {
+        document.removeEventListener('keydown', onKeyDown);
+        overlay.onclick = null;
+        cancelBtn.onclick = null;
+        saveBtn.onclick = null;
+      };
+
+      const close = result => {
+        removeListeners();
+        overlay.hidden = true;
+        if (previousFocus && typeof previousFocus.focus === 'function') previousFocus.focus();
+        resolve(result);
+      };
+
+      const showError = text => {
+        errorEl.textContent = text;
+        errorEl.hidden = false;
+      };
+
+      const submit = () => {
+        const values = readInputs();
+
+        for (const field of currentFields()) {
+          const input = inputs[field.name];
+          if (field.required && input && !input.value.trim()) {
+            showError(`${field.label || field.name} is required.`);
+            input.focus();
+            return;
+          }
+        }
+
+        const validationError = validate ? validate(values, activeTab) : '';
+        if (validationError) {
+          showError(validationError);
+          return;
+        }
+
+        const tabDef = currentTab();
+        if (tabDef && typeof tabDef.validate === 'function') {
+          const tabError = tabDef.validate(values);
+          if (tabError) {
+            showError(tabError);
+            return;
+          }
+        }
+
+        close(tabList ? { tab: activeTab, values } : values);
+      };
+
+      const onKeyDown = event => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          close(null);
+        } else if (event.key === 'Enter' && event.target.tagName === 'INPUT') {
+          event.preventDefault();
+          submit();
+        }
+      };
+
+      overlay.onclick = event => {
+        if (event.target === overlay) close(null);
+      };
+      cancelBtn.onclick = () => close(null);
+      saveBtn.onclick = submit;
+      document.addEventListener('keydown', onKeyDown);
+
+      renderTabs();
+      renderFields();
+      overlay.hidden = false;
+      focusFirstInput();
     });
+  }
 
-    renderLeft();
-    updateTimer();
+  // --- ADD PROVIDER (website scraper or API model) ---
+  async function addCustomProvider() {
+    const result = await showAppModal({
+      title: 'Add Provider',
+      message: 'Website scrapers drive a logged-in browser tab; API models call an OpenAI-compatible endpoint.',
+      confirmLabel: 'Add',
+      tabs: [
+        {
+          id: 'api',
+          label: 'API / Local',
+          fields: [
+            { name: 'name', label: 'Display name', placeholder: 'My Local Llama', required: true },
+            { name: 'modelId', label: 'Model ID', placeholder: 'llama3.1:8b', required: true },
+            { name: 'endpoint', label: 'Endpoint URL', value: 'https://', required: true },
+            { name: 'apiKey', label: 'API key (optional)', type: 'password', placeholder: 'Leave blank if not required' }
+          ],
+          validate: form => {
+            try {
+              const url = new URL(form.endpoint.trim());
+              if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
+            } catch {
+              return 'Enter a valid http(s) endpoint URL.';
+            }
+            return '';
+          }
+        },
+        {
+          id: 'scrape',
+          label: 'Website / Scraper',
+          fields: [
+            { name: 'name', label: 'Display name', placeholder: 'My Website', required: true },
+            { name: 'url', label: 'URL', value: 'https://', required: true },
+            { name: 'inputSelector', label: 'Input Selector', placeholder: '#prompt-textarea, textarea', required: true },
+            { name: 'responseSelector', label: 'Response Selector', placeholder: '.markdown', required: true }
+          ],
+          validate: form => {
+            try {
+              const url = new URL(form.url.trim());
+              if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
+            } catch {
+              return 'Enter a valid http(s) site URL.';
+            }
+            return '';
+          }
+        }
+      ]
+    });
+    if (!result) return;
+
+    const { tab, values } = result;
+    const name = values.name.trim();
+
+    if (!window.api?.addProvider) {
+      alert('Custom providers are available in the Electron desktop app.');
+      return;
+    }
+
+    // The provider config is persisted by main in userData/providers.json.
+    let created;
+    try {
+      created = tab === 'scrape'
+        ? await window.api.addProvider({
+            name,
+            kind: 'scrape',
+            emoji: '🌐',
+            url: values.url.trim(),
+            inputSelector: values.inputSelector.trim(),
+            responseSelector: values.responseSelector.trim(),
+            submitAction: 'enter',
+            checked: true
+          })
+        : await window.api.addProvider({
+            name,
+            kind: 'api',
+            emoji: '🧩',
+            endpoint: values.endpoint.trim(),
+            modelId: values.modelId.trim(),
+            checked: true
+          });
+    } catch (error) {
+      alert(`Could not add the provider: ${error.message}`);
+      return;
+    }
+
+    if (!created?.ok) {
+      alert(created?.error || 'Could not add the provider.');
+      return;
+    }
+
+    // The key goes straight to the encrypted store; CH never sees it.
+    if (tab === 'api' && values.apiKey.trim()) {
+      try {
+        const saved = await window.api.setKey(created.provider.keyRef, values.apiKey.trim());
+        if (!saved?.ok) {
+          alert(`Provider added, but the API key was not saved: ${saved?.error || 'unknown error'}`);
+        }
+      } catch (error) {
+        alert(`Provider added, but the API key was not saved: ${error.message}`);
+      }
+    }
+
+    await refreshProviders();
+    saveUiPrefs();
   }
 
   // Helper: Blend cool blue -> warm orange -> glowing gold.
@@ -596,6 +988,7 @@
             <input type="checkbox" ${ch.checked ? 'checked' : ''} aria-label="Enable ${esc(ch.name)}">
             <span class="llm-emoji">${ch.emoji}</span>
             <span class="llm-name">${esc(ch.name)}</span>
+            ${ch.isUser ? `<button class="remove-btn" title="Remove provider" aria-label="Remove ${esc(ch.name)}">✕</button>` : ''}
           </div>
         `;
 
@@ -604,6 +997,7 @@
         checkbox.onchange = () => {
           ch.checked = checkbox.checked;
           row.classList.toggle('off', !ch.checked);
+          saveUiPrefs();
           updateTimer();
         };
       } else {
@@ -620,8 +1014,9 @@
             <input type="checkbox" ${ch.checked ? 'checked' : ''} aria-label="Enable ${esc(ch.name)}">
             <span class="llm-emoji">${ch.emoji}</span>
             <span class="llm-name">${esc(ch.name)}</span>
-            ${ch.type === 'custom' ? `<span class="model-badge" title="${esc(ch.endpoint)}">API</span>` : ''}
+            ${ch.kind === 'api' ? `<span class="model-badge" title="${esc(ch.endpoint)}">API</span>` : ''}
             <button class="lock-btn${ch.locked ? ' on' : ''}" title="${ch.locked ? 'Unlock model' : 'Lock model'}" aria-label="${ch.locked ? 'Unlock model' : 'Lock model'}" aria-pressed="${ch.locked}">${ch.locked ? '🔒' : '🔓'}</button>
+            ${ch.isUser ? `<button class="remove-btn" title="Remove provider" aria-label="Remove ${esc(ch.name)}">✕</button>` : ''}
           </div>
           <div class="slider-row">
             <input type="range" min="1" max="100" step="1" value="${ch.value}" ${isSliderDisabled ? 'disabled' : ''} aria-label="${esc(ch.name)} detail level">
@@ -645,6 +1040,7 @@
         checkbox.onchange = () => {
           ch.checked = checkbox.checked;
           row.classList.toggle('off', !ch.checked);
+          saveUiPrefs();
           updateTimer();
         };
 
@@ -654,6 +1050,7 @@
           ch.value = parseInt(slider.value, 10);
           commitMasterBaseline();
           applyHeat(row, ch.value);
+          saveUiPrefs();
           updateHistory();
           updateTimer();
         };
@@ -670,6 +1067,7 @@
             ch.lockedValue = ch.value;
           }
           rebaseModel(ch);
+          saveUiPrefs();
           renderLeft();
           updateTimer();
         };
@@ -680,21 +1078,27 @@
           e.stopPropagation();
           ch.prefixType = prefixSelect.value;
           ch.prefix = getPrefixText(ch);
+          saveUiPrefs();
           renderLeft();
         };
 
-        // Pencil -> prompt() -> store the custom string back on CH
+        // Pencil -> shared modal -> store the custom string back on CH
         const editBtn = row.querySelector('.prefix-edit-btn');
-        editBtn.onclick = (e) => {
+        editBtn.onclick = async (e) => {
           e.stopPropagation();
           const current = ch.customPrefix || getPrefixText(ch);
-          const result = prompt(`Enter custom prefix for ${ch.name}:`, current);
-          if (result !== null && result.trim() !== '') {
-            ch.customPrefix = result.trim();
-            ch.prefixType = 'Custom';
-            ch.prefix = ch.customPrefix;
-            renderLeft();
-          }
+          const values = await showAppModal({
+            title: `Custom prefix for ${ch.name}`,
+            message: 'This prefix is prepended to your prompt for this model.',
+            confirmLabel: 'Use prefix',
+            fields: [{ name: 'prefix', label: 'Prefix text', value: current, required: true }]
+          });
+          if (!values) return;
+          ch.customPrefix = values.prefix.trim();
+          ch.prefixType = 'Custom';
+          ch.prefix = ch.customPrefix;
+          saveUiPrefs();
+          renderLeft();
         };
       }
 
@@ -704,10 +1108,32 @@
         el.onmousedown = (e) => e.stopPropagation();
       });
 
+      // User-added providers can be removed; built-ins cannot.
+      const removeBtn = row.querySelector('.remove-btn');
+      if (removeBtn) {
+        removeBtn.onclick = async (e) => {
+          e.stopPropagation();
+          if (!confirm(`Remove ${ch.name}? You can add it again later.`)) return;
+          try {
+            const result = await window.api.removeProvider(ch.id);
+            if (!result?.ok) {
+              alert(result?.error || 'Could not remove the provider.');
+              return;
+            }
+          } catch (error) {
+            alert(`Could not remove the provider: ${error.message}`);
+            return;
+          }
+          forgetChannelPrefs(ch.id);
+          await refreshProviders();
+        };
+      }
+
       // Clicking the row (outside a control/handle) toggles its checkbox.
       row.onclick = (e) => {
         if (e.target.closest('input, select, button, .grab-handle')) return;
         ch.checked = !ch.checked;
+        saveUiPrefs();
         renderLeft();
         updateTimer();
       };
@@ -749,6 +1175,7 @@
         const [movedItem] = CH.splice(from, 1);
         CH.splice(index, 0, movedItem);
         draggedIdx = null;
+        saveUiPrefs();
         renderLeft();
       };
 
@@ -764,9 +1191,9 @@
 
     const addBtn = document.createElement('button');
     addBtn.className = 'add-custom-btn';
-    addBtn.textContent = '➕ Add Custom LLM';
-    addBtn.title = 'Add an OpenAI-compatible API endpoint';
-    addBtn.onclick = addCustomModel;
+    addBtn.textContent = '➕ Add Provider';
+    addBtn.title = 'Add a website scraper or an OpenAI-compatible API endpoint';
+    addBtn.onclick = addCustomProvider;
     list.appendChild(addBtn);
   }
 
@@ -791,6 +1218,7 @@
         }
       });
     }
+    saveUiPrefs();
     renderLeft();
     updateTimer();
   };
@@ -804,6 +1232,7 @@
   masterSlider.oninput = () => {
     applyMasterOffset();
     syncMasterUI();
+    saveUiPrefs();
     renderLeft();
     updateHistory();
     updateTimer();
@@ -823,21 +1252,96 @@
       }
     });
     commitMasterBaseline();
+    saveUiPrefs();
     renderLeft();
     updateHistory();
     updateTimer();
   };
 
-  // --- CONVERSATION & TURNS STATE ---
-  let turns = [];
+  // --- CONVERSATION TREE STATE (T4) ---
+  // A conversation is a tree, not a flat array. `activeLeafId` points at the
+  // node on screen; the visible conversation is the path from that leaf up to
+  // its root, reversed. Branching later only needs to move `activeLeafId`.
+  const convo = {
+    version: 1,
+    nodes: {},
+    rootIds: [],
+    activeLeafId: null
+  };
   let activeTab = 'hybrid';
   const openState = {};
-  const isOpen = (t, id) => !!openState[t.n + ':' + id];
-  const setOpen = (t, id, v) => { openState[t.n + ':' + id] = v; };
+
+  function newTurnId() {
+    // randomUUID needs a secure context. file:// qualifies in Electron, but a
+    // fallback keeps the page working in browsers without crypto.randomUUID.
+    if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+    return 't-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }
+
+  // Root -> active leaf, in display order.
+  function activePath() {
+    const path = [];
+    const seen = new Set();
+    let id = convo.activeLeafId;
+    while (id && convo.nodes[id] && !seen.has(id)) {
+      seen.add(id);
+      path.push(convo.nodes[id]);
+      id = convo.nodes[id].parentId;
+    }
+    return path.reverse();
+  }
+
+  // Create a node and make it the active leaf. The caller supplies `id` on
+  // Send so the same turnId travels to main and back with every IPC message.
+  function addTurn(parentId, prompt, engine, order, id = newTurnId()) {
+    const node = {
+      id,
+      parentId: parentId || null,
+      childIds: [],
+      prompt,
+      engine,
+      replies: {},
+      order: [...order],
+      hybrid: {
+        text: 'Waiting for LLMs...',
+        status: 'pending',
+        log: '',
+        score: 0,
+        reason: '',
+        sources: [...order],
+        omitted: {}
+      },
+      locked: false,
+      createdAt: Date.now()
+    };
+
+    convo.nodes[id] = node;
+    if (node.parentId && convo.nodes[node.parentId]) {
+      convo.nodes[node.parentId].childIds.push(id);
+    } else {
+      node.parentId = null;
+      convo.rootIds.push(id);
+    }
+    convo.activeLeafId = id;
+    return node;
+  }
+
+  // Replies are {text, status, ms}. Strings are accepted so a conversation
+  // restored from an older shape still renders.
+  function replyOf(node, id) {
+    const reply = node && node.replies ? node.replies[id] : null;
+    if (!reply) return null;
+    if (typeof reply === 'string') return { text: reply, status: 'success', ms: 0 };
+    return reply;
+  }
+
+  // Open state is per node, not per turn number, so branches don't collide.
+  const isOpen = (node, id) => !!openState[node.id + ':' + id];
+  const setOpen = (node, id, v) => { openState[node.id + ':' + id] = v; };
 
   function channelsUsed() {
     const used = new Set();
-    turns.forEach(t => {
+    Object.values(convo.nodes).forEach(t => {
       Object.keys(t.replies || {}).forEach(id => used.add(id));
       if (t.hybrid) {
         (t.hybrid.sources || []).forEach(id => used.add(id));
@@ -880,18 +1384,23 @@
   function renderConv() {
     const wrap = document.getElementById('convWrap');
     wrap.innerHTML = '';
-    const depth = parseInt(document.getElementById('hsRange').value);
+    const depth = parseInt(document.getElementById('hsRange').value, 10) || 0;
+    const path = activePath();
+    // Context is the last `depth` nodes of the active path.
+    const ctxStart = Math.max(0, path.length - depth);
 
-    turns.forEach((t, idx) => {
-      const inCtx = idx < depth;
+    path.forEach((t, idx) => {
+      const inCtx = idx >= ctxStart;
       const el = document.createElement('div');
       el.className = 'turn' + (inCtx ? ' in-ctx' : '');
+      el.dataset.turn = t.id;
+      if (t.locked) el.dataset.locked = '1';
 
       const head = document.createElement('div');
       head.className = 'turn-head';
-      head.innerHTML = `<span class="tnum">▶ T${t.n}</span>
+      head.innerHTML = `<span class="tnum">▶ T${idx + 1}</span>
         <span>·</span>
-        <span>${t.prompt.slice(0, 60)}${t.prompt.length > 60 ? '…' : ''}</span>
+        <span>${esc(t.prompt.slice(0, 60))}${t.prompt.length > 60 ? '…' : ''}</span>
         ${inCtx ? '<span style="color:var(--accent);font-size:13px">· in context</span>' : ''}
         <button class="log-btn" title="Channel log">📜</button>`;
       el.appendChild(head);
@@ -913,6 +1422,7 @@
 
         const body = document.createElement('div');
         body.className = 'hybrid-body';
+        body.dataset.kind = 'hybrid';
         body.textContent = t.hybrid.text;
         card.appendChild(body);
 
@@ -967,18 +1477,20 @@
         (t.order || []).forEach(id => {
           const ch = CH.find(x => x.id === id);
           if (!ch) return;
-          const raw = t.replies ? t.replies[id] : null;
-          if (!raw) return;
+          const reply = replyOf(t, id);
+          if (!reply) return;
+          const raw = reply.text || '';
           const parsed = parseScore(raw);
           const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
           const replyBody = stripScore(raw);
+          const secs = reply.ms ? (reply.ms / 1000).toFixed(1) + 's' : '';
 
           const sr = document.createElement('div');
           sr.className = 'src-reply' + (isOpen(t, id) ? ' open' : '');
           const head2 = document.createElement('div');
           head2.className = 'src-head';
-          head2.innerHTML = `<span>${ch.emoji} ${ch.name}</span>
-            <span class="time">${((t.times && t.times[id]) || 0).toFixed(1)}s</span>
+          head2.innerHTML = `<span>${ch.emoji} ${esc(ch.name)}</span>
+            <span class="time">${secs}</span>
             ${pct != null ? `<span class="pct ${scoreClass(pct)}">🎯 ${pct}%</span>` : ''}`;
           sr.appendChild(head2);
           sr.appendChild(document.createTextNode(replyBody));
@@ -995,8 +1507,9 @@
       }
 
       if (activeTab !== 'hybrid') {
-        const raw = t.replies ? t.replies[activeTab] : null;
-        if (raw) {
+        const reply = replyOf(t, activeTab);
+        if (reply) {
+          const raw = reply.text || '';
           const parsed = parseScore(raw);
           const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
           const replyBody = stripScore(raw);
@@ -1011,6 +1524,7 @@
 
           const bd = document.createElement('div');
           bd.className = 'hybrid-body';
+          bd.dataset.kind = 'reply';
           bd.textContent = replyBody;
           card.appendChild(bd);
 
@@ -1041,26 +1555,33 @@
   const est = s => Math.ceil((s || '').length / 4);
   function turnTok(t) {
     let n = est(t.prompt);
-    Object.values(t.replies || {}).forEach(r => n += est(r));
+    Object.values(t.replies || {}).forEach(r => n += est(typeof r === 'string' ? r : r && r.text));
     if (t.hybrid) n += est(t.hybrid.text);
     return n;
   }
-  function tokUpTo(d) { return turns.slice(0, d).reduce((s, t) => s + turnTok(t), 0); }
+  // History depth is the last `d` nodes of the active path (T4).
+  function historyNodes(d) {
+    const path = activePath();
+    const depth = Math.max(0, Math.min(d || 0, path.length));
+    return depth === 0 ? [] : path.slice(path.length - depth);
+  }
+  function tokUpTo(d) { return historyNodes(d).reduce((s, t) => s + turnTok(t), 0); }
 
   function updateHistory() {
-    const d = parseInt(hsRange.value);
-    if (d === 0) {
+    const d = parseInt(hsRange.value, 10) || 0;
+    const path = activePath();
+    const included = historyNodes(d);
+    const last = included.length ? included[included.length - 1] : null;
+
+    if (!last) {
       hsPreview.innerHTML = `<strong>0:</strong> fresh — no prior context`;
       hsDepth.textContent = '0 turns';
     } else {
-      const last = turns[d - 1];
-      if (last) {
-        hsPreview.innerHTML = `<strong>T${d}:</strong> "${last.prompt.slice(0, 60)}${last.prompt.length > 60 ? '…' : ''}"`;
-        hsDepth.textContent = d + ' turn' + (d === 1 ? '' : 's');
-      }
+      hsPreview.innerHTML = `<strong>T${path.length}:</strong> "${esc(last.prompt.slice(0, 60))}${last.prompt.length > 60 ? '…' : ''}"`;
+      hsDepth.textContent = d + ' turn' + (d === 1 ? '' : 's');
     }
     hsTok.textContent = tokUpTo(d) + ' tok';
-    hsMeta.textContent = d === 0 ? `0 of ${turns.length} — fresh` : `${d} of ${turns.length} in context`;
+    hsMeta.textContent = d === 0 ? `0 of ${path.length} — fresh` : `${d} of ${path.length} in context`;
     hsNext.textContent = '~' + estimateSend().toFixed(1) + 's';
     renderConv();
   }
@@ -1169,21 +1690,18 @@
   });
 
   function renderAll() {
-    if (turns.length > 0) {
-      hsRange.max = turns.length;
-      if (parseInt(hsRange.value) > turns.length) hsRange.value = turns.length;
-    }
+    const count = activePath().length;
+    hsRange.max = String(count);
+    if ((parseInt(hsRange.value, 10) || 0) > count) hsRange.value = String(count);
     renderTabs();
     renderConv();
   }
 
   // --- INITIALIZE UI ---
   syncMasterUI();
-  renderLeft();
-  renderAll();
-  updateHistory();
-  updateTimer();
   setLegendContext('idle');
+  // Providers arrive from main; CH is populated and rendered when they land.
+  refreshProviders();
 
 
   // ==========================================
@@ -1192,39 +1710,50 @@
 
   // 1. Clear Chat
   window.clearChat = () => {
-    turns = [];
+    convo.nodes = {};
+    convo.rootIds = [];
+    convo.activeLeafId = null;
+    Object.keys(openState).forEach(key => delete openState[key]);
+    hsRange.value = '0';
     renderAll();
-    const wrap = document.getElementById('convWrap');
-    if (wrap) wrap.innerHTML = '';
     updateHistory();
   };
 
-  // 2. Settings: store the DeepSeek key via encrypted IPC
+  // 2. Settings: store the DeepSeek key via the encrypted key store
   const settingsBtn = document.getElementById('settingsBtn');
   if (settingsBtn) {
     settingsBtn.onclick = async () => {
-      if (!window.api?.getDeepSeekKeyStatus || !window.api?.setDeepSeekKey) {
+      if (!window.api?.hasKey || !window.api?.setKey) {
         alert('Settings are available in the Electron desktop app.');
         return;
       }
 
-      let status = { configured: false };
+      let configured = false;
       try {
-        status = await window.api.getDeepSeekKeyStatus();
+        configured = await window.api.hasKey('deepseek');
       } catch {
         // Fall through to the prompt; saving will surface any real error.
       }
 
-      const message = status.source === 'environment'
-        ? 'DEEPSEEK_API_KEY is active and takes precedence. Enter a key to store for future sessions (blank to keep current):'
-        : status.configured
-          ? 'DeepSeek API key is configured. Enter a new key (leave blank to keep it):'
-          : 'Enter your DeepSeek API key:';
-      const key = prompt(message, '');
-      if (key === null || !key.trim()) return;
+      const message = configured
+        ? 'A DeepSeek API key is already configured. Enter a new key to replace it.'
+        : 'Enter your DeepSeek API key. It is encrypted by the operating system and never stored in the page. An environment variable, if set, takes precedence.';
+      const values = await showAppModal({
+        title: 'DeepSeek API Key',
+        message,
+        confirmLabel: 'Save',
+        fields: [{
+          name: 'key',
+          label: 'API key',
+          type: 'password',
+          placeholder: 'sk-...',
+          required: true
+        }]
+      });
+      if (!values) return;
 
       try {
-        const result = await window.api.setDeepSeekKey(key.trim());
+        const result = await window.api.setKey('deepseek', values.key.trim());
         if (result?.ok) {
           alert('DeepSeek API key saved securely.');
         } else {
@@ -1246,94 +1775,88 @@
     if (activeModels.length === 0) return alert("Select at least one model.");
 
     const engine = document.getElementById('engineToggle').value;
-    const customModels = active
-      .filter(c => c.type === 'custom')
-      .map(c => ({
-        id: c.id,
-        name: c.name,
-        endpoint: c.endpoint,
-        apiKey: c.apiKey
-      }));
 
-    const newTurn = {
-      n: turns.length + 1,
-      prompt: promptText,
-      engine,
-      replies: {},
-      order: activeModels,
-      times: {},
-      hybrid: { text: "Waiting for LLMs...", sources: activeModels, score: 0, reason: "" }
-    };
+    // The renderer owns the id: it is created here, stored on the node, and
+    // echoed back by main in every IPC payload for this turn.
+    const turnId = newTurnId();
+    addTurn(convo.activeLeafId, promptText, engine, activeModels, turnId);
 
-    turns.push(newTurn);
     document.getElementById('masterText').value = '';
     renderAll();
     updateTimer();
     startSend();
 
     if (window.api?.sendPrompt) {
-      window.api.sendPrompt(promptText, activeModels, engine, customModels);
+      window.api.sendPrompt({ turnId, promptText, activeModels, engine });
     }
   };
 
   // 4. LLM Individual Replies via IPC
+  // Payloads carry their turnId, so a late reply can never land in a newer
+  // turn (B1).
   if (window.api?.onReplyReceived) {
-    window.api.onReplyReceived((data) => {
-      const currentTurn = turns[turns.length - 1];
-      if (currentTurn) {
-        if (data.text) currentTurn.replies[data.model] = data.text;
-        if (!currentTurn.order.includes(data.model)) {
-          currentTurn.order.push(data.model);
-        }
-        currentTurn.hybrid.text = "Synthesizing...";
-        currentTurn.hybrid.reason = String(currentTurn.engine || '').includes('Cloud')
+    window.api.onReplyReceived(({ turnId, model, text, status, ms }) => {
+      const turn = convo.nodes[turnId];
+      if (!turn) return;
+
+      turn.replies[model] = {
+        text: text || '',
+        status: status || 'success',
+        ms: Number(ms) || 0
+      };
+      if (!turn.order.includes(model)) {
+        turn.order.push(model);
+      }
+
+      // A locked (finished) turn keeps its synthesized answer.
+      if (status !== 'loading' && !turn.locked) {
+        turn.hybrid.text = "Synthesizing...";
+        turn.hybrid.status = 'synthesizing';
+        turn.hybrid.reason = String(turn.engine || '').includes('Cloud')
           ? "Running DeepSeek cloud synthesis..."
           : "Running local OpenVINO model...";
-        renderAll();
       }
+      renderAll();
     });
   }
 
   // 5. Hybrid Stream via IPC
   if (window.api?.onHybridStream) {
-    window.api.onHybridStream((chunk) => {
-      const currentTurn = turns[turns.length - 1];
-      if (currentTurn && currentTurn.hybrid) {
-        const placeholder = currentTurn.hybrid.text;
-        if (placeholder === "Synthesizing..." || placeholder === "Waiting for LLMs...") {
-          currentTurn.hybrid.text = "";
-        }
-        currentTurn.hybrid.text += chunk;
+    window.api.onHybridStream(({ turnId, chunk }) => {
+      const turn = convo.nodes[turnId];
+      if (!turn || !turn.hybrid) return;
 
-        const allTurns = document.querySelectorAll('.turn');
-        if (allTurns.length > 0) {
-          const lastTurn = allTurns[allTurns.length - 1];
-          const hybridBody = lastTurn.querySelector('.hybrid-body');
-          if (hybridBody) {
-            hybridBody.textContent = currentTurn.hybrid.text;
-            const centerPanel = document.querySelector('.center');
-            if (centerPanel) centerPanel.scrollTop = centerPanel.scrollHeight;
-          }
-        }
+      const placeholder = turn.hybrid.text;
+      if (placeholder === "Synthesizing..." || placeholder === "Waiting for LLMs...") {
+        turn.hybrid.text = "";
+      }
+      turn.hybrid.text += chunk || '';
+      turn.hybrid.status = 'streaming';
+
+      // Target by turn id, not position (B2). No full re-render per chunk.
+      const hybridBody = document.querySelector(`[data-turn="${turnId}"] .hybrid-body[data-kind="hybrid"]`);
+      if (hybridBody) {
+        hybridBody.textContent = turn.hybrid.text;
+        const centerPanel = document.querySelector('.center');
+        if (centerPanel) centerPanel.scrollTop = centerPanel.scrollHeight;
       }
     });
   }
 
   // 6. Hybrid Synthesis Complete via IPC
   if (window.api?.onHybridComplete) {
-    window.api.onHybridComplete(() => {
-      const currentTurn = turns[turns.length - 1];
-      if (currentTurn) {
-        currentTurn.hybrid.score = 100;
-        currentTurn.hybrid.reason = "Synthesis Complete";
+    window.api.onHybridComplete((payload = {}) => {
+      const turn = convo.nodes[payload.turnId];
+      if (!turn) return;
 
-        const scoreBars = document.querySelectorAll('.score-bar');
-        if (scoreBars.length > 0) {
-          const lastScoreBar = scoreBars[scoreBars.length - 1];
-          lastScoreBar.className = 'score-bar';
-          lastScoreBar.innerHTML = `<span class="pct">🎯 100%</span><span class="reason">Synthesis Complete</span>`;
-        }
-      }
+      turn.hybrid.status = 'complete';
+      turn.hybrid.score = 100;
+      turn.hybrid.reason = "Synthesis Complete";
+      // A completed turn is locked (T4). Its prompt and replies stay put.
+      turn.locked = true;
+
+      // Re-render from state so this node's score bar is the one updated.
+      renderAll();
     });
   }
 </script>
