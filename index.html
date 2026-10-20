@@ -243,6 +243,9 @@
   .troubleshoot-code code { display: block; font-family: 'Cascadia Code', Consolas, 'Courier New', monospace; font-size: 12px; line-height: 1.7; color: var(--accent); white-space: pre; }
   .troubleshoot-hint { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
   #troubleshootModal .app-modal-actions button.secondary { border-color: var(--accent); color: var(--accent); }
+
+  /* BROWSER DEMO: controls that need Electron/Playwright */
+  .demo-mode .electron-only { display: none !important; }
 </style>
 </head>
 <body>
@@ -253,7 +256,7 @@
     <div class="lb-full">
       <div class="rail-header" style="padding: 0 0 10px 0; border: none;">
         <span>Active Models</span>
-        <span style="cursor:pointer; color:var(--accent);" onclick="addCustomProvider()">+ Add</span>
+        <span id="addProviderBtn" class="electron-only" style="cursor:pointer; color:var(--accent);" onclick="addCustomProvider()">+ Add</span>
       </div>
       
       <div class="master-slider">
@@ -285,7 +288,7 @@
   <div class="center">
     <div class="topbar">
       <div class="tabs" id="tabs"></div>
-      <button id="loginBtn" onclick="window.api?.startLoginMode?.()">🔐 Login Mode</button>
+      <button id="loginBtn" class="electron-only" onclick="transport.startLoginMode?.()">🔐 Login Mode</button>
       <button id="newChatBtn" onclick="clearChat()">🗑️ New Chat</button>
       <button id="settingsBtn">⚙ Settings</button>
       <button class="legend-pill" id="legendPill">📖 Legend ▾</button>
@@ -413,6 +416,126 @@
     'ELI5': "Explain like I'm 5 years old. Use simple language and relatable analogies."
   };
 
+  // --- TRANSPORT -------------------------------------------------------------
+  // Electron's preload exposes window.api. The static GitHub Pages build has no
+  // preload, so it falls back to demoTransport, which replays canned replies
+  // through the same callbacks the IPC bridge uses.
+  const isElectron = typeof window.api === 'object' && window.api !== null;
+
+  // Mirrors providers.json so the browser demo has a usable model list.
+  const DEMO_PROVIDERS = [
+    { id: 'brave', name: 'Brave', emoji: '🦁', kind: 'scrape', isStatic: true, checked: true, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 100, ttft: 0.5 },
+    { id: 'google', name: 'Google AI', emoji: '🔍', kind: 'scrape', isStatic: true, checked: true, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 100, ttft: 0.5 },
+    { id: 'chatgpt', name: 'ChatGPT', emoji: '🤖', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 80, ttft: 0.4 },
+    { id: 'claude', name: 'Claude', emoji: '🎭', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 75, ttft: 0.4 },
+    { id: 'gemini', name: 'Gemini', emoji: '♊', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Detailed', maxTokens: 1000, tps: 195, ttft: 0.5 },
+    { id: 'deepseek', name: 'DeepSeek', emoji: '🌊', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Detailed', maxTokens: 1000, tps: 110, ttft: 0.4 },
+    { id: 'grok', name: 'Grok', emoji: '🌌', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 90, ttft: 0.5 },
+    { id: 'meta', name: 'Meta AI', emoji: '💠', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Concise', maxTokens: 1000, tps: 85, ttft: 0.5 },
+    { id: 'copilot', name: 'Copilot', emoji: '🛩️', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Detailed', maxTokens: 1000, tps: 70, ttft: 0.6 },
+    { id: 'perplexity', name: 'Perplexity', emoji: '🔭', kind: 'scrape', isStatic: false, checked: false, value: 50, prefixType: 'Detailed', maxTokens: 1000, tps: 60, ttft: 0.8 }
+  ];
+
+  const MOCK_RESPONSES = {
+    "what does this tool do?": {
+      long: {
+        brave: "This tool is a local-first, multi-LLM orchestration cockpit. It bypasses paid API tokens by using Playwright to physically scrape answers from web interfaces (like Brave Search, Google AI Mode, ChatGPT, etc.). It then passes those raw text blocks to a local Qwen3-8B model running on your own GPU via Intel OpenVINO. The local model acts as a 'Synthesizer'—merging the consensus, flagging contradictions, and generating a Fidelity Log so you know exactly what was kept and what was dropped.",
+        google: "At its core, this application functions as a decentralized AI aggregator. Instead of relying on costly APIs, it utilizes Playwright automation to query your existing web subscriptions. You select the models you want, hit send, and the tool extracts their responses. Subsequently, a local OpenVINO-powered LLM (Qwen3-8B) synthesizes the data based on a strict Fidelity Clause, eliminating hallucinations, removing fluff, and presenting a unified, highly accurate hybrid answer.",
+        chatgpt: "This application acts as a unified interface for multiple AI models. It uses Playwright to automate browser scraping, gathering responses from various web UIs without needing API keys. A local Qwen3-8B model running on Intel hardware then synthesizes these responses using a 'Fidelity Clause' to merge information accurately.",
+        claude: "This tool is an automated, multi-model synthesis engine. It bypasses API costs by using Playwright to extract text directly from web chat interfaces. It then routes the collected data to a local OpenVINO LLM, which merges the outputs into a single hybrid response, complete with a Fidelity Log detailing what was kept, dropped, or disputed.",
+        gemini: "This application serves as an AI aggregator and synthesizer. Users can select from up to ten different web-based language models. The tool autonomously extracts responses from these sites and feeds them into a local Qwen3-8B pipeline. The final output is a synthesized hybrid answer designed to maximize factual consensus while identifying conflicting data points.",
+        deepseek: "This is a Node.js/Electron application utilizing Playwright for DOM-based text extraction from LLM web interfaces. The extracted strings are piped via IPC to a Python backend running OpenVINO. Here, a quantized Qwen3-8B model processes the inputs using a custom prompt architecture (Fidelity Clause) to perform semantic merging, returning a JSON-structured hybrid response.",
+        grok: "Think of this as a boss-level AI turntable. Instead of paying for API tokens, it secretly opens tabs to all your favorite chatbots, copies their homework, and feeds it to a local brain on your GPU. That local model then scrubs out the fluff, stitches the good parts together, and gives you one bulletproof answer without the corporate censorship.",
+        meta: "This tool simplifies how you interact with artificial intelligence by bringing multiple models into one space. It gathers answers from different platforms and uses a local Qwen model to blend them. It's designed for privacy and efficiency, running the final synthesis step entirely on your own hardware so your data stays with you.",
+        copilot: "This application is a professional-grade AI orchestrator. It streamlines research by querying multiple language models simultaneously via browser automation. The collected responses are then processed by a local OpenVINO engine, which applies a strict Fidelity Clause to merge the data into a clean, unified report with a detailed audit log.",
+        perplexity: "This tool functions as a multi-LLM research aggregator. By leveraging Playwright, it extracts current data from various AI search engines and chat interfaces. It then utilizes a local Qwen3-8B model to synthesize the extracted text, cross-referencing claims and producing a final answer with a transparent Fidelity Log to ensure source integrity."
+      },
+      short: {
+        brave: "This is a browser tool that scrapes web AIs and merges them locally.",
+        google: "It is an AI merger that scrapes search engines and synthesizes them.",
+        chatgpt: "It's a custom desktop app that scrapes multiple AIs and uses a local model to merge their answers.",
+        claude: "It's a multi-model text synthesizer that scrapes web chats and merges them using a local GPU.",
+        gemini: "It aggregates AI responses from the web and synthesizes them locally.",
+        deepseek: "It's an Electron/Playwright scraper hooked to a local OpenVINO Python pipeline for text synthesis.",
+        grok: "It's a scraper that steals answers from 10 AIs and makes your local GPU merge them.",
+        meta: "It's a privacy-focused tool that blends answers from multiple AIs using your local hardware.",
+        copilot: "It's an enterprise-ready AI tool that unifies web scrapers and local synthesis.",
+        perplexity: "It's a multi-LLM research tool that aggregates web data and synthesizes it locally."
+      },
+      hybrid: {
+        brave: "This tool is a local-first, multi-LLM orchestration cockpit. By bypassing paid APIs, it uses Playwright to scrape answers from web interfaces and passes them to a local Qwen3-8B model running on your GPU via Intel OpenVINO. It merges consensus, flags contradictions, and generates a Fidelity Log.",
+        google: "This application functions as a decentralized AI aggregator using Playwright automation to query web subscriptions. The extracted responses are synthesized by a local OpenVINO-powered LLM (Qwen3-8B), which applies a strict Fidelity Clause to eliminate fluff, remove hallucinations, and present a highly accurate hybrid answer.",
+        chatgpt: "This tool unifies multiple AI models through Playwright browser automation, gathering responses from web UIs without API keys. A local Qwen3-8B model on Intel hardware then synthesizes these responses using a Fidelity Clause to accurately merge information into one hybrid answer.",
+        claude: "This is an automated, multi-model synthesis engine. It uses Playwright to extract text from web chat interfaces, bypassing API costs. The data is routed to a local OpenVINO LLM, which merges the outputs into a single hybrid response accompanied by a Fidelity Log detailing what was kept, dropped, or disputed.",
+        gemini: "This application serves as an AI aggregator. It autonomously extracts responses from up to ten web-based language models and feeds them into a local Qwen3-8B pipeline. The output is a synthesized hybrid answer designed to maximize factual consensus while identifying conflicting data points.",
+        deepseek: "This is a Node.js/Electron application utilizing Playwright for DOM-based extraction from LLM web interfaces. Extracted strings are piped via IPC to a Python/OpenVINO backend, where a quantized Qwen3-8B model performs semantic merging using a custom Fidelity Clause, returning a hybrid response.",
+        grok: "This is a boss-level AI turntable. It opens tabs to your favorite chatbots, copies their answers, and feeds it to a local GPU brain. The local model scrubs the fluff, stitches the good parts together, and gives you one bulletproof answer without API costs.",
+        meta: "This tool brings multiple AI models into one space. It gathers answers from different platforms and uses a local Qwen model to blend them, running the final synthesis step entirely on your own hardware so your data stays private.",
+        copilot: "This is a professional-grade AI orchestrator. It queries multiple language models simultaneously via browser automation, then processes the responses using a local OpenVINO engine. A strict Fidelity Clause merges the data into a clean, unified report with an audit log.",
+        perplexity: "This tool aggregates research by extracting data from AI search engines and chat interfaces. It utilizes a local Qwen3-8B model to synthesize the text, cross-referencing claims and producing a final answer with a transparent Fidelity Log to ensure source integrity."
+      }
+    }
+  };
+
+  // Replays the demo's canned replies through the same callbacks that
+  // preload.js exposes, so the renderer needs no demo-specific code paths.
+  const demoTransport = (() => {
+    const listeners = { reply: [], stream: [], complete: [] };
+    const mock = MOCK_RESPONSES['what does this tool do?'];
+
+    return {
+      getProviders: async () => DEMO_PROVIDERS.map(provider => ({ ...provider })),
+
+      sendPrompt({ turnId, activeModels = [] }) {
+        const ids = activeModels.filter(id => mock.long[id]);
+        if (!ids.length) return;
+
+        let lastReplyAt = 0;
+        ids.forEach((id, index) => {
+          const channel = DEMO_PROVIDERS.find(provider => provider.id === id);
+          const isShort = channel && channel.maxTokens <= 400;
+          const text = (isShort ? mock.short[id] : mock.long[id]) || mock.long[id] || 'No response.';
+          const delay = 900 + index * 250;
+          lastReplyAt = Math.max(lastReplyAt, delay);
+          setTimeout(() => {
+            listeners.reply.forEach(cb => cb({
+              turnId,
+              model: id,
+              text: `${text}\n\nSCORE: 9/10\nREASON: Accurately described the tool.`,
+              status: 'success',
+              ms: delay
+            }));
+          }, delay);
+        });
+
+        const hybridText = activeModels.map(id => mock.hybrid[id] || '').filter(Boolean).join(' ');
+        const chunks = hybridText.match(/[\s\S]{1,90}(?=\s|$)/g) || [hybridText];
+
+        setTimeout(() => {
+          let index = 0;
+          const timer = setInterval(() => {
+            listeners.stream.forEach(cb => cb({ turnId, chunk: chunks[index] }));
+            index += 1;
+            if (index >= chunks.length) {
+              clearInterval(timer);
+              listeners.complete.forEach(cb => cb({ turnId }));
+            }
+          }, 45);
+        }, lastReplyAt + 600);
+      },
+
+      onReplyReceived: callback => { listeners.reply.push(callback); },
+      onHybridStream: callback => { listeners.stream.push(callback); },
+      onHybridComplete: callback => { listeners.complete.push(callback); }
+    };
+  })();
+
+  const transport = window.api ?? demoTransport;
+
+  // Scraper providers and Login Mode need Playwright/Electron; hide the
+  // controls that can't work on GitHub Pages.
+  if (!isElectron) document.documentElement.classList.add('demo-mode');
+
   let CH = [];
   const UI_PREFS_KEY = 'llmx.uiPrefs.v1';
 
@@ -513,9 +636,9 @@
 
   async function refreshProviders() {
     let providers = [];
-    if (window.api?.getProviders) {
+    if (transport.getProviders) {
       try {
-        const list = await window.api.getProviders();
+        const list = await transport.getProviders();
         if (Array.isArray(list)) providers = list;
       } catch (error) {
         console.error('Could not load provider registry:', error);
@@ -739,14 +862,14 @@
             return '';
           }
         }
-      ]
+      ].filter(tab => isElectron || tab.id !== 'scrape')
     });
     if (!result) return;
 
     const { tab, values } = result;
     const name = values.name.trim();
 
-    if (!window.api?.addProvider) {
+    if (!isElectron || !transport.addProvider) {
       alert('Custom providers are available in the Electron desktop app.');
       return;
     }
@@ -754,12 +877,12 @@
     let created;
     try {
       created = tab === 'scrape'
-        ? await window.api.addProvider({
+        ? await transport.addProvider({
             name, kind: 'scrape', emoji: '🌐', url: values.url.trim(),
             inputSelector: values.inputSelector.trim(), responseSelector: values.responseSelector.trim(),
             submitAction: 'enter', checked: true
           })
-        : await window.api.addProvider({
+        : await transport.addProvider({
             name, kind: 'api', emoji: '🧩', endpoint: values.endpoint.trim(),
             modelId: values.modelId.trim(), checked: true
           });
@@ -775,7 +898,7 @@
 
     if (tab === 'api' && values.apiKey.trim()) {
       try {
-        const saved = await window.api.setKey(created.provider.keyRef, values.apiKey.trim());
+        const saved = await transport.setKey(created.provider.keyRef, values.apiKey.trim());
         if (!saved?.ok) alert(`Provider added, but the API key was not saved: ${saved?.error || 'unknown error'}`);
       } catch (error) {
         alert(`Provider added, but the API key was not saved: ${error.message}`);
@@ -1112,8 +1235,9 @@
         const ch = row._ch;
         if (!ch) return;
         if (!confirm(`Remove ${ch.name}? You can add it again later.`)) return;
+        if (!transport.removeProvider) return;
         try {
-          const result = await window.api.removeProvider(ch.id);
+          const result = await transport.removeProvider(ch.id);
           if (!result?.ok) {
             alert(result?.error || 'Could not remove the provider.');
             return;
@@ -1213,7 +1337,7 @@
 
     if (!leftAddBtn) {
       leftAddBtn = document.createElement('button');
-      leftAddBtn.className = 'add-custom-btn';
+      leftAddBtn.className = 'add-custom-btn electron-only';
       leftAddBtn.textContent = '➕ Add Provider';
       leftAddBtn.onclick = addCustomProvider;
     }
@@ -1408,13 +1532,13 @@
     const turn = convo.nodes[turnId];
     if (!turn) return;
 
-    if (!window.api?.exportConversation) {
+    if (!transport.exportConversation) {
       alert('Export is available in the Electron desktop app.');
       return;
     }
 
     try {
-      const result = await window.api.exportConversation(buildTurnMarkdown(turn));
+      const result = await transport.exportConversation(buildTurnMarkdown(turn));
       if (result?.canceled) return;
 
       if (result?.ok) {
@@ -2121,11 +2245,11 @@
   const settingsBtn = document.getElementById('settingsBtn');
   if (settingsBtn) {
     settingsBtn.onclick = async () => {
-      if (!window.api?.hasKey || !window.api?.setKey) {
+      if (!transport.hasKey || !transport.setKey) {
         alert('Settings are available in the Electron desktop app.'); return;
       }
       let configured = false;
-      try { configured = await window.api.hasKey('deepseek'); } catch {}
+      try { configured = await transport.hasKey('deepseek'); } catch {}
 
       const message = configured
         ? 'A DeepSeek API key is already configured. Enter a new key to replace it.'
@@ -2136,7 +2260,7 @@
       });
       if (!values) return;
       try {
-        const result = await window.api.setKey('deepseek', values.key.trim());
+        const result = await transport.setKey('deepseek', values.key.trim());
         if (result?.ok) alert('DeepSeek API key saved securely.');
         else alert(result?.error || 'Could not save the DeepSeek API key.');
       } catch (error) { alert(`Could not save the DeepSeek API key: ${error.message}`); }
@@ -2175,8 +2299,8 @@
     addTurn(parentId, promptText, engine, activeModels, turnId);
     renderAll(); updateTimer(); startSend();
 
-    if (window.api?.sendPrompt) {
-      window.api.sendPrompt({ turnId, promptText, activeModels, engine });
+    if (transport.sendPrompt) {
+      transport.sendPrompt({ turnId, promptText, activeModels, engine });
     }
     return turnId;
   }
@@ -2248,8 +2372,8 @@
     };
   }
 
-  if (window.api?.onEngineError) {
-    window.api.onEngineError(({ turnId, message } = {}) => {
+  if (transport.onEngineError) {
+    transport.onEngineError(({ turnId, message } = {}) => {
       lastEngineErrorTurnId = turnId || null;
       const turn = turnId ? convo.nodes[turnId] : null;
       if (turn) {
@@ -2264,8 +2388,8 @@
     });
   }
 
-  if (window.api?.onReplyReceived) {
-    window.api.onReplyReceived(({ turnId, model, text, status, ms }) => {
+  if (transport.onReplyReceived) {
+    transport.onReplyReceived(({ turnId, model, text, status, ms }) => {
       const turn = convo.nodes[turnId];
       if (!turn) return;
       turn.replies[model] = { text: text || '', status: status || 'success', ms: Number(ms) || 0 };
@@ -2279,8 +2403,8 @@
     });
   }
 
-  if (window.api?.onHybridStream) {
-    window.api.onHybridStream(({ turnId, chunk }) => {
+  if (transport.onHybridStream) {
+    transport.onHybridStream(({ turnId, chunk }) => {
       const turn = convo.nodes[turnId];
       if (!turn || !turn.hybrid) return;
       const placeholder = turn.hybrid.text;
@@ -2299,8 +2423,8 @@
     });
   }
 
-  if (window.api?.onHybridComplete) {
-    window.api.onHybridComplete((payload = {}) => {
+  if (transport.onHybridComplete) {
+    transport.onHybridComplete((payload = {}) => {
       const turn = convo.nodes[payload.turnId];
       if (!turn) return;
       // An engine error already owns this turn's final state.
