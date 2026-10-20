@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld('api', {
   // persistent context per id and waits for the user to close it.
   startLoginMode: (ids) => ipcRenderer.send('login-mode', ids),
 
+  // Whether the Local GPU engine exists on this machine. The renderer hides
+  // the Local option when it does not.
+  getEngineStatus: () => ipcRenderer.invoke('engine:status'),
+
   // Provider registry
   getProviders: () => ipcRenderer.invoke('providers:list'),
   // Read-only installable presets from templates.json.

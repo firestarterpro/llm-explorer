@@ -707,7 +707,10 @@ async function runDeepSeekSynthesis(responses, event, turnId) {
 }
 
 function runSynthesis(responses, event, engine, turnId) {
-  const useCloud = String(engine || '').toLowerCase().includes('cloud');
+  const requested = String(engine || '').trim().toLowerCase();
+  // An absent engine means the out-of-the-box Cloud default, matching the
+  // renderer and the user-prompt handler.
+  const useCloud = requested ? requested.includes('cloud') : true;
   return useCloud
     ? runDeepSeekSynthesis(responses, event, turnId)
     : runSynthesizer(responses, event, turnId);
@@ -783,7 +786,9 @@ app.whenReady().then(() => {
   // payload: { turnId, promptText, activeModels, engine }.
   // Configs, and any API keys, are resolved in main from the registry.
   ipcMain.on('user-prompt', async (event, payload = {}) => {
-    const { turnId, promptText = '', activeModels = [], engine = 'Local GPU' } = payload || {};
+    // Cloud is the out-of-the-box engine: Local GPU needs a separate Python
+    // environment that a stakeholder's machine will not have.
+    const { turnId, promptText = '', activeModels = [], engine = 'Cloud' } = payload || {};
 
     // Without an id the renderer cannot route the replies, so refuse rather
     // than fall back to "the last turn".
@@ -901,7 +906,13 @@ app.whenReady().then(() => {
     }
   });
 
-  // 4. Export the current turn as Markdown. The renderer sends the already
+  // 4. Whether the Local GPU engine can run here. A stakeholder's machine has
+  // no C:\llm Python environment, so the renderer hides the Local option.
+  ipcMain.handle('engine:status', () => ({
+    localAvailable: fs.existsSync(PYTHON_EXE)
+  }));
+
+  // 5. Export the current turn as Markdown. The renderer sends the already
   // formatted text; main only owns the native save dialog and disk write.
   ipcMain.handle('export-conversation', async (event, text) => {
     const content = typeof text === 'string' ? text : '';

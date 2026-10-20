@@ -411,8 +411,8 @@
         <button id="hybridBtn">🪟 Hybrid</button>
         <button class="toggle free" id="freeBtn">🆓 Free APIs</button>
         <select class="engine-select" id="engineToggle" title="Synthesis engine" aria-label="Synthesis engine">
-          <option value="Local GPU" selected>⚡ Local GPU</option>
-          <option value="Cloud">☁️ DeepSeek API</option>
+          <option value="Local GPU">⚡ Local GPU</option>
+          <option value="Cloud" selected>☁️ DeepSeek API</option>
         </select>
         <button class="primary send-btn" id="sendBtn">
           <span>Send ✈️</span>
@@ -440,8 +440,8 @@
     <div class="bottom-mini" id="bottomMini">
       <input class="mini-input" id="miniText" type="text" placeholder="Prompt...">
       <select class="mini-engine" id="miniEngineToggle">
-        <option value="Local GPU" selected>Local</option>
-        <option value="Cloud">DeepSeek</option>
+        <option value="Local GPU">Local</option>
+        <option value="Cloud" selected>DeepSeek</option>
       </select>
       <button class="primary mini-send" id="miniSendBtn">✈️</button>
     </div>
@@ -489,30 +489,32 @@
     <div class="onboarding-eyebrow">Welcome</div>
     <h2 id="onboardingTitle">Welcome to LLM Explorer</h2>
     <p class="app-modal-message onboarding-lede">
-      Ask every model at once. Choose how you want to connect before you send your first prompt.
+      LLM Explorer needs two parts working together. <strong>DeepSeek is the synthesis engine (the brain).</strong>
+      <strong>Brave and Google are the data scrapers (the eyes).</strong> You need both — the scrapers fetch the
+      raw answers, and DeepSeek merges them into one final response.
     </p>
 
     <div class="onboarding-choice-grid">
       <button type="button" class="onboarding-choice" id="onboardingCloudChoice">
-        <span class="oc-icon" aria-hidden="true">☁️</span>
-        <span class="oc-badge">Recommended</span>
-        <span class="oc-title">Use Cloud API</span>
-        <span class="oc-desc">Add a DeepSeek API key for fast, reliable answers with no browser automation.</span>
+        <span class="oc-icon" aria-hidden="true">🧠</span>
+        <span class="oc-badge">Required</span>
+        <span class="oc-title">Add the DeepSeek key (the brain)</span>
+        <span class="oc-desc">The synthesis engine. DeepSeek reads every scraped answer and writes the single final response.</span>
         <span class="oc-cta">Enter DeepSeek key →</span>
       </button>
 
       <button type="button" class="onboarding-choice" id="onboardingScrapeChoice">
-        <span class="oc-icon" aria-hidden="true">🌐</span>
-        <span class="oc-title">Use Free Web Scrapers</span>
-        <span class="oc-desc">Sign in to your favourite LLM websites once. Playwright reuses those sessions for free.</span>
+        <span class="oc-icon" aria-hidden="true">👀</span>
+        <span class="oc-title">Sources are ready (the eyes)</span>
+        <span class="oc-desc">Brave and Google need no login. Use Login Mode only if you add an account-only site later.</span>
         <span class="oc-cta">Start Login Mode →</span>
       </button>
     </div>
 
     <div class="onboarding-login-step" id="onboardingLoginStep" hidden>
       <p>
-        Login windows are open. Sign in to each provider, then close the windows. Your sessions are
-        saved locally for future prompts.
+        Login windows are open. Sign in to each account-only provider you added, then close the windows.
+        Your sessions are saved locally for future prompts.
       </p>
       <button type="button" class="primary" id="onboardingDoneBtn">I've finished logging in</button>
     </div>
@@ -2959,8 +2961,14 @@
       // Both are fixed overlays; hide onboarding while the key dialog is open.
       onboardingModal.hidden = true;
       const saved = await openDeepSeekSettings({ silentSuccess: true });
-      if (saved) finishOnboarding();
-      else showOnboarding();
+      if (saved) {
+        // DeepSeek is the synthesis engine, so a saved key means Cloud is the
+        // engine from now on — never leave the selects on Local GPU.
+        setEngine('Cloud');
+        finishOnboarding();
+      } else {
+        showOnboarding();
+      }
     };
   }
 
@@ -2986,11 +2994,15 @@
   const engineToggle = document.getElementById('engineToggle');
   const miniEngineToggle = document.getElementById('miniEngineToggle');
   const ENGINE_PREF_KEY = 'llmx.engine.v1';
+  let localEngineAvailable = true;
   let lastPrompt = null;
   let lastEngineErrorTurnId = null;
 
   function setEngine(value) {
-    const engine = String(value || '').toLowerCase().includes('cloud') ? 'Cloud' : 'Local GPU';
+    let engine = String(value || '').toLowerCase().includes('cloud') ? 'Cloud' : 'Local GPU';
+    // Local GPU is hidden when its Python environment is missing, so never
+    // leave the selects (or the saved preference) pointing at it.
+    if (engine === 'Local GPU' && !localEngineAvailable) engine = 'Cloud';
     if (engineToggle) engineToggle.value = engine;
     if (miniEngineToggle) miniEngineToggle.value = engine;
     try { localStorage.setItem(ENGINE_PREF_KEY, engine); } catch {}
@@ -2998,7 +3010,7 @@
   }
 
   function currentEngine() {
-    return engineToggle?.value || miniEngineToggle?.value || 'Local GPU';
+    return engineToggle?.value || miniEngineToggle?.value || 'Cloud';
   }
 
   if (engineToggle) engineToggle.onchange = () => setEngine(engineToggle.value);
@@ -3007,6 +3019,22 @@
     const savedEngine = localStorage.getItem(ENGINE_PREF_KEY);
     if (savedEngine) setEngine(savedEngine);
   } catch {}
+
+  // Ask main whether the Local GPU engine exists. When it does not, remove the
+  // option entirely from both selects and fall back to Cloud.
+  async function applyEngineAvailability() {
+    if (typeof transport.getEngineStatus !== 'function') return;
+    let status = null;
+    try { status = await transport.getEngineStatus(); } catch {}
+    if (!status || status.localAvailable) return;
+    localEngineAvailable = false;
+    [engineToggle, miniEngineToggle].forEach(select => {
+      const option = select?.querySelector('option[value="Local GPU"]');
+      if (option) option.remove();
+    });
+    setEngine('Cloud');
+  }
+  applyEngineAvailability();
 
   function dispatchPrompt(promptText, activeModels, engine, parentId = convo.activeLeafId) {
     const turnId = newTurnId();
