@@ -129,6 +129,7 @@
   .hybrid-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px;}
   .hybrid-label { font-size: 11px; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; font-weight: bold; }
   .hybrid-body { font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  .hybrid-log { margin-top: 10px; padding: 8px 10px; background: rgba(255,255,255,0.03); border-left: 2px solid var(--border); border-radius: 4px; font-size: 11px; line-height: 1.5; color: var(--text-muted); white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
   
   .score-bar { padding: 8px 12px; font-size: 12px; cursor: pointer; background: rgba(255,255,255,0.05); border-top: 1px solid var(--border); display: flex; gap: 8px; margin-top: 12px; border-radius: 6px; }
   .source-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
@@ -733,6 +734,7 @@
         version: 1,
         order: CH.map(ch => ch.id),
         hidden: [...hiddenIds],
+        prefixOn: !prefixToggleBtn || prefixToggleBtn.classList.contains('on'),
         channels
       }));
     } catch {
@@ -751,6 +753,18 @@
     } catch {
       // Ignore
     }
+  }
+
+  // The Prefix toggle gates whether each model gets its shaped prefix. Its
+  // state lives with the rest of the UI prefs so a restart keeps it.
+  const prefixToggleBtn = document.getElementById('prefixToggleBtn');
+  if (prefixToggleBtn) {
+    const prefs = loadUiPrefs();
+    if (typeof prefs.prefixOn === 'boolean') prefixToggleBtn.classList.toggle('on', prefs.prefixOn);
+    prefixToggleBtn.onclick = () => {
+      prefixToggleBtn.classList.toggle('on');
+      saveUiPrefs();
+    };
   }
 
   function buildChannels(providers, prefs) {
@@ -2002,6 +2016,12 @@
       if (turn.hybrid.reason) lines.push(`> ${turn.hybrid.reason}`, '');
     }
 
+    // Status and provider errors stay out of the synthesis text, but they are
+    // still worth keeping in the export as a separate section.
+    if (turn.hybrid && turn.hybrid.log) {
+      lines.push('## Synthesis Log', '', turn.hybrid.log, '');
+    }
+
     return lines.join('\n');
   }
 
@@ -2106,6 +2126,12 @@
     body.className = 'hybrid-body';
     body.dataset.kind = 'hybrid';
 
+    // Status lines ([Running local OpenVINO synthesis...], provider errors) go
+    // here instead of into the answer, so an export never contains them.
+    const logEl = document.createElement('div');
+    logEl.className = 'hybrid-log';
+    logEl.hidden = true;
+
     const scoreBar = document.createElement('div');
     scoreBar.className = 'score-bar';
     const pct = document.createElement('span');
@@ -2155,9 +2181,9 @@
     };
 
     sourceBar.append(spacer, sourcesBtn, exportBtn, allBtn);
-    el.append(label, body, scoreBar, sourceBar);
+    el.append(label, body, logEl, scoreBar, sourceBar);
 
-    return { el, turnId, mode: 'hybrid', label, body, scoreBar, pct, reason, sourceBar, spacer, emojiEls: new Map(), emojiOrder: '', srcEls: new Map(), srcOrder: '' };
+    return { el, turnId, mode: 'hybrid', label, body, log: logEl, scoreBar, pct, reason, sourceBar, spacer, emojiEls: new Map(), emojiOrder: '', srcEls: new Map(), srcOrder: '' };
   }
 
   function buildReplyCard(t) {
@@ -2248,6 +2274,12 @@
     const hybrid = t.hybrid;
     const text = hybrid.text || '';
     if (refs.body.textContent !== text) refs.body.textContent = text;
+
+    const log = hybrid.log || '';
+    if (refs.log) {
+      if (refs.log.textContent !== log) refs.log.textContent = log;
+      refs.log.hidden = !log;
+    }
 
     const score = Number(hybrid.score) || 0;
     const open = refs.scoreBar.classList.contains('open');
@@ -3036,13 +3068,71 @@
   }
   applyEngineAvailability();
 
+  // Walks from a node up to the root. Unlike activePath(), this describes the
+  // branch a new turn is being attached to (fork/retry pass an explicit parent).
+  function pathToNode(nodeId) {
+    const path = [];
+    const seen = new Set();
+    let id = nodeId;
+    while (id && convo.nodes[id] && !seen.has(id)) {
+      seen.add(id);
+      path.push(convo.nodes[id]);
+      id = convo.nodes[id].parentId;
+    }
+    return path.reverse();
+  }
+
+  // The History Context block: the last `depth` turns before the new prompt,
+  // as plain User/Answer lines that any scraped or API model can read.
+  const PLACEHOLDER_RE = /^(Waiting for LLMs\.\.\.|Synthesizing\.\.\.)$/;
+
+  function buildHistoryContext(parentId, depth) {
+    const turns = pathToNode(parentId);
+    const requested = Math.max(0, Math.min(Number(depth) || 0, turns.length));
+    if (!requested) return '';
+
+    const lines = [];
+    turns.slice(turns.length - requested).forEach(turn => {
+      lines.push(`User: ${String(turn.prompt || '').trim()}`);
+      const answer = turn.hybrid && turn.hybrid.status !== 'error'
+        ? String(turn.hybrid.text || '').trim()
+        : '';
+      if (answer && !PLACEHOLDER_RE.test(answer)) lines.push(`Answer: ${answer}`);
+    });
+    return lines.join('\n');
+  }
+
+  // Prefix + History Context + Original Prompt, joined with blank lines so a
+  // scraped page or API model can tell the sections apart.
+  function buildModelPrompt(ch, promptText, parentId) {
+    const parts = [];
+
+    if (!prefixToggleBtn || prefixToggleBtn.classList.contains('on')) {
+      const prefix = ch ? getPrefixText(ch).trim() : '';
+      if (prefix) parts.push(prefix);
+    }
+
+    const history = buildHistoryContext(parentId, parseInt(hsRange.value, 10) || 0);
+    if (history) parts.push(`Conversation so far:\n${history}`);
+
+    parts.push(promptText);
+    return parts.join('\n\n');
+  }
+
   function dispatchPrompt(promptText, activeModels, engine, parentId = convo.activeLeafId) {
     const turnId = newTurnId();
     addTurn(parentId, promptText, engine, activeModels, turnId);
     renderAll(); updateTimer(); startSend();
 
+    // One shaped prompt per active model. The turn itself keeps the original
+    // prompt so the UI and the export show what the user actually typed.
+    const perModelPrompts = {};
+    activeModels.forEach(id => {
+      perModelPrompts[id] = buildModelPrompt(CH.find(ch => ch.id === id), promptText, parentId);
+    });
+
     if (transport.sendPrompt) {
-      transport.sendPrompt({ turnId, promptText, activeModels, engine });
+      transport.sendPrompt({ turnId, promptText, activeModels, engine, perModelPrompts });
     }
     return turnId;
   }
@@ -3145,18 +3235,48 @@
     });
   }
 
+  // Main sends status and provider errors as bracketed chunks. A streamed
+  // answer chunk could legitimately contain brackets, so require one complete
+  // single-line [..] pair before treating it as a log line.
+  function isStatusChunk(chunk) {
+    const trimmed = String(chunk || '').trim();
+    if (trimmed.length < 3 || !trimmed.startsWith('[') || !trimmed.endsWith(']')) return false;
+    const inner = trimmed.slice(1, -1);
+    return !inner.includes('[') && !inner.includes(']') && !inner.includes('\n');
+  }
+
   if (transport.onHybridStream) {
     transport.onHybridStream(({ turnId, chunk }) => {
       const turn = convo.nodes[turnId];
       if (!turn || !turn.hybrid) return;
+
+      const turnEl = turnEls.get(turnId);
+      const hybridBody = turnEl ? turnEl.querySelector('.hybrid-body[data-kind="hybrid"]') : null;
+
+      if (isStatusChunk(chunk)) {
+        const line = String(chunk).trim();
+        turn.hybrid.log = turn.hybrid.log ? `${turn.hybrid.log}\n${line}` : line;
+        // Never let a status line be mistaken for the answer. Clearing the
+        // placeholder also keeps an aborted synthesis from looking "in flight".
+        if (PLACEHOLDER_RE.test(turn.hybrid.text)) turn.hybrid.text = '';
+
+        if (hybridBody) hybridBody.textContent = turn.hybrid.text;
+        const logEl = turnEl ? turnEl.querySelector('.hybrid-log') : null;
+        if (logEl) {
+          logEl.textContent = turn.hybrid.log;
+          logEl.hidden = false;
+        }
+        const centerPanel = document.querySelector('.center');
+        if (centerPanel) centerPanel.scrollTop = centerPanel.scrollHeight;
+        return;
+      }
+
       const placeholder = turn.hybrid.text;
       if (placeholder === "Synthesizing..." || placeholder === "Waiting for LLMs...") turn.hybrid.text = "";
       turn.hybrid.text += chunk || '';
       // A late log line must not erase the offline state set by engine-error.
       if (turn.hybrid.status !== 'error') turn.hybrid.status = 'streaming';
 
-      const turnEl = turnEls.get(turnId);
-      const hybridBody = turnEl ? turnEl.querySelector('.hybrid-body[data-kind="hybrid"]') : null;
       if (hybridBody) {
         hybridBody.textContent = turn.hybrid.text;
         const centerPanel = document.querySelector('.center');

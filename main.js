@@ -594,17 +594,20 @@ function extractModelText(data) {
 }
 
 // --- DEEPSEEK CLOUD SYNTHESIZER ------------------------------------------
-function buildSynthesisPrompt(responses) {
+function buildSynthesisPrompt(question, responses) {
   return [
     'You are a multi-model synthesis engine. Merge the source responses below into one',
     'coherent answer. Preserve consensus, note meaningful disagreements, remove repetition,',
     'and do not invent facts that are absent from the sources.',
     '',
+    `The user asked: ${String(question || '').trim() || '(no question provided)'}.`,
+    'Here are the responses:',
+    '',
     ...responses.map((text, index) => `--- SOURCE ${index + 1} ---\n${text}`)
   ].join('\n');
 }
 
-async function runDeepSeekSynthesis(responses, event, turnId) {
+async function runDeepSeekSynthesis(responses, promptText, event, turnId) {
   const validResponses = responses.filter(Boolean);
   if (validResponses.length === 0) {
     sendStream(event, turnId, '\n[No responses were collected. Cannot synthesize.]\n');
@@ -632,7 +635,7 @@ async function runDeepSeekSynthesis(responses, event, turnId) {
       body: JSON.stringify({
         model: DEEPSEEK_MODEL,
         messages: [
-          { role: 'system', content: buildSynthesisPrompt(validResponses) },
+          { role: 'system', content: buildSynthesisPrompt(promptText, validResponses) },
           { role: 'user', content: 'Return the consolidated synthesis now.' }
         ],
         stream: true,
@@ -706,13 +709,15 @@ async function runDeepSeekSynthesis(responses, event, turnId) {
   }
 }
 
-function runSynthesis(responses, event, engine, turnId) {
+function runSynthesis(responses, promptText, event, engine, turnId) {
   const requested = String(engine || '').trim().toLowerCase();
   // An absent engine means the out-of-the-box Cloud default, matching the
   // renderer and the user-prompt handler.
   const useCloud = requested ? requested.includes('cloud') : true;
   return useCloud
-    ? runDeepSeekSynthesis(responses, event, turnId)
+    ? runDeepSeekSynthesis(responses, promptText, event, turnId)
+    // The local Python script still takes a bare response list on stdin, so the
+    // question is only added on the Cloud path until synthesize.py accepts it.
     : runSynthesizer(responses, event, turnId);
 }
 
@@ -783,12 +788,29 @@ app.whenReady().then(() => {
   createWindow();
 
   // 1. Handle Chat Prompts
-  // payload: { turnId, promptText, activeModels, engine }.
+  // payload: { turnId, promptText, activeModels, engine, perModelPrompts }.
   // Configs, and any API keys, are resolved in main from the registry.
   ipcMain.on('user-prompt', async (event, payload = {}) => {
     // Cloud is the out-of-the-box engine: Local GPU needs a separate Python
     // environment that a stakeholder's machine will not have.
-    const { turnId, promptText = '', activeModels = [], engine = 'Cloud' } = payload || {};
+    const {
+      turnId,
+      promptText = '',
+      activeModels = [],
+      engine = 'Cloud',
+      perModelPrompts = null
+    } = payload || {};
+
+    // The renderer shapes one prompt per model (prefix + history + question).
+    // Anything malformed falls back to the shared prompt.
+    const modelPromptById = perModelPrompts && typeof perModelPrompts === 'object' && !Array.isArray(perModelPrompts)
+      ? perModelPrompts
+      : {};
+
+    const promptForModel = (id) => {
+      const shaped = modelPromptById[id];
+      return typeof shaped === 'string' && shaped.trim() ? shaped : promptText;
+    };
 
     // Without an id the renderer cannot route the replies, so refuse rather
     // than fall back to "the last turn".
@@ -824,7 +846,7 @@ app.whenReady().then(() => {
           });
           return null;
         }
-        return () => runProvider(config, promptText, event, turnId);
+        return () => runProvider(config, promptForModel(config.id), event, turnId);
       })
       .filter(Boolean);
 
@@ -840,7 +862,7 @@ app.whenReady().then(() => {
     // A connection error thrown by the local engine must surface as a modal,
     // not as a silently stalled turn.
     try {
-      runSynthesis(textResponses, event, engine, turnId);
+      runSynthesis(textResponses, promptText, event, engine, turnId);
     } catch (error) {
       console.error('Synthesis failed:', error.message);
       sendStream(event, turnId, `\n[Synthesis failed: ${error.message}]\n`);
