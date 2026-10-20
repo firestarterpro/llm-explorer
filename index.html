@@ -969,232 +969,376 @@
   }
 
   // --- LEFT BAR RENDERING ---
-  function renderLeft() {
-    const list = document.getElementById('llmList');
-    list.innerHTML = '';
+  // Rows live in a Map keyed by channel id. A row is built once and updated in
+  // place on every state change; appendChild() is only used to reorder.
+  const leftRows = new Map();
+  let leftAddBtn = null;
+  let leftOrderKey = '';
 
-    CH.forEach((ch, index) => {
-      const row = document.createElement('div');
-      row.dataset.id = ch.id;
-      row.dataset.index = index;
-      row.setAttribute('draggable', 'true');
+  // A channel whose structure changes (static/model, API/scrape, user/built-in)
+  // needs a new skeleton; everything else is an in-place update.
+  function leftRowSignature(ch) {
+    return [
+      ch.isStatic ? 'static' : 'model',
+      ch.kind || '',
+      ch.isUser ? 'user' : 'builtin'
+    ].join('|');
+  }
 
-      if (ch.isStatic) {
-        // Brave / Google: checkbox + drag handle only.
-        row.className = `llm-row static-row${ch.checked ? '' : ' off'}`;
-        row.innerHTML = `
-          <div class="llm-head">
-            <span class="grab-handle" title="Drag to reorder">⋮⋮</span>
-            <input type="checkbox" ${ch.checked ? 'checked' : ''} aria-label="Enable ${esc(ch.name)}">
-            <span class="llm-emoji">${ch.emoji}</span>
-            <span class="llm-name">${esc(ch.name)}</span>
-            ${ch.isUser ? `<button class="remove-btn" title="Remove provider" aria-label="Remove ${esc(ch.name)}">✕</button>` : ''}
-          </div>
-        `;
+  function createLeftRow(ch) {
+    const row = document.createElement('div');
+    row.className = 'llm-row';
+    row.dataset.id = ch.id;
+    row.dataset.sig = leftRowSignature(ch);
+    row.setAttribute('draggable', 'true');
 
-        const checkbox = row.querySelector('input[type="checkbox"]');
-        checkbox.onclick = (e) => e.stopPropagation();
-        checkbox.onchange = () => {
-          ch.checked = checkbox.checked;
-          row.classList.toggle('off', !ch.checked);
-          saveUiPrefs();
-          updateTimer();
-        };
-      } else {
-        // Interactive model row: checkbox + handle + slider + lock + prefix.
-        const isSliderDisabled = !masterLocked && ch.locked;
-        const currentPrefix = getPrefixText(ch);
+    if (ch.isStatic) {
+      // Brave / Google: checkbox + drag handle only.
+      row.innerHTML = `
+        <div class="llm-head">
+          <span class="grab-handle" title="Drag to reorder">⋮⋮</span>
+          <input type="checkbox" aria-label="Enable model">
+          <span class="llm-emoji"></span>
+          <span class="llm-name"></span>
+          <button class="remove-btn" hidden title="Remove provider" aria-label="Remove provider">✕</button>
+        </div>
+      `;
+    } else {
+      // Interactive model row: checkbox + handle + slider + lock + prefix.
+      row.innerHTML = `
+        <div class="llm-head">
+          <span class="grab-handle" title="Drag to reorder">⋮⋮</span>
+          <input type="checkbox" aria-label="Enable model">
+          <span class="llm-emoji"></span>
+          <span class="llm-name"></span>
+          <span class="model-badge" hidden>API</span>
+          <button class="lock-btn" title="Lock model" aria-label="Lock model" aria-pressed="false">🔓</button>
+          <button class="remove-btn" hidden title="Remove provider" aria-label="Remove provider">✕</button>
+        </div>
+        <div class="slider-row">
+          <input type="range" min="1" max="100" step="1" value="50" aria-label="Detail level">
+        </div>
+        <div class="prefix-row">
+          <span class="prefix-label">Prefix</span>
+          <select class="prefix-select" aria-label="Prefix">
+            <option value="Concise">Concise</option>
+            <option value="Detailed">Detailed</option>
+            <option value="ELI5">ELI5</option>
+          </select>
+          <button class="prefix-edit-btn" title="Edit custom prefix" aria-label="Edit custom prefix">✏️</button>
+        </div>
+        <div class="prefix-preview"></div>
+      `;
+    }
 
-        row.className = `llm-row${ch.checked ? '' : ' off'}`;
+    bindLeftRowEvents(row);
+    return row;
+  }
+
+  function updateLeftRow(row, ch, index) {
+    row._ch = ch;
+    row.dataset.id = ch.id;
+    row.dataset.index = String(index);
+    row.classList.add('llm-row');
+    row.classList.toggle('off', !ch.checked);
+    row.classList.toggle('static-row', !!ch.isStatic);
+
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    if (checkbox.checked !== !!ch.checked) checkbox.checked = !!ch.checked;
+    checkbox.setAttribute('aria-label', `Enable ${ch.name}`);
+
+    row.querySelector('.llm-emoji').textContent = ch.emoji;
+    row.querySelector('.llm-name').textContent = ch.name;
+
+    const removeBtn = row.querySelector('.remove-btn');
+    if (removeBtn) {
+      removeBtn.hidden = !ch.isUser;
+      removeBtn.setAttribute('aria-label', `Remove ${ch.name}`);
+    }
+
+    if (ch.isStatic) return;
+
+    applyHeat(row, ch.value);
+
+    const badge = row.querySelector('.model-badge');
+    if (badge) {
+      badge.hidden = ch.kind !== 'api';
+      if (ch.kind === 'api') badge.title = ch.endpoint || '';
+    }
+
+    const lockBtn = row.querySelector('.lock-btn');
+    const lockLabel = ch.locked ? 'Unlock model' : 'Lock model';
+    lockBtn.classList.toggle('on', !!ch.locked);
+    lockBtn.textContent = ch.locked ? '🔒' : '🔓';
+    lockBtn.title = lockLabel;
+    lockBtn.setAttribute('aria-label', lockLabel);
+    lockBtn.setAttribute('aria-pressed', String(!!ch.locked));
+
+    const slider = row.querySelector('input[type="range"]');
+    slider.disabled = !masterLocked && !!ch.locked;
+    slider.setAttribute('aria-label', `${ch.name} detail level`);
+    if (document.activeElement !== slider) slider.value = String(ch.value);
+
+    const select = row.querySelector('.prefix-select');
+    let customOption = select.querySelector('option[value="Custom"]');
+    if (ch.prefixType === 'Custom' && !customOption) {
+      customOption = document.createElement('option');
+      customOption.value = 'Custom';
+      customOption.textContent = 'Custom';
+      select.appendChild(customOption);
+    } else if (ch.prefixType !== 'Custom' && customOption) {
+      customOption.remove();
+    }
+    if (select.value !== ch.prefixType) select.value = ch.prefixType;
+
+    const preview = row.querySelector('.prefix-preview');
+    const prefixText = getPrefixText(ch);
+    const previewText = `↳ ${prefixText}`;
+    if (preview.textContent !== previewText) preview.textContent = previewText;
+    preview.title = prefixText;
+  }
+
+  // Handlers read row._ch at event time: refreshProviders() replaces the CH
+  // objects, and a cached row must keep editing the current channel.
+  function bindLeftRowEvents(row) {
+    // Checkbox state
+    const checkbox = row.querySelector('input[type="checkbox"]');
+    checkbox.onclick = (e) => e.stopPropagation();
+    checkbox.onchange = () => {
+      const ch = row._ch;
+      if (!ch) return;
+      ch.checked = checkbox.checked;
+      row.classList.toggle('off', !ch.checked);
+      saveUiPrefs();
+      updateTimer();
+    };
+
+    // Per-model slider. A manual edit becomes the new baseline.
+    const slider = row.querySelector('input[type="range"]');
+    if (slider) {
+      slider.oninput = () => {
+        const ch = row._ch;
+        if (!ch) return;
+        ch.value = parseInt(slider.value, 10);
+        commitMasterBaseline();
         applyHeat(row, ch.value);
+        saveUiPrefs();
+        updateHistory();
+        updateTimer();
+      };
+    }
 
-        row.innerHTML = `
-          <div class="llm-head">
-            <span class="grab-handle" title="Drag to reorder">⋮⋮</span>
-            <input type="checkbox" ${ch.checked ? 'checked' : ''} aria-label="Enable ${esc(ch.name)}">
-            <span class="llm-emoji">${ch.emoji}</span>
-            <span class="llm-name">${esc(ch.name)}</span>
-            ${ch.kind === 'api' ? `<span class="model-badge" title="${esc(ch.endpoint)}">API</span>` : ''}
-            <button class="lock-btn${ch.locked ? ' on' : ''}" title="${ch.locked ? 'Unlock model' : 'Lock model'}" aria-label="${ch.locked ? 'Unlock model' : 'Lock model'}" aria-pressed="${ch.locked}">${ch.locked ? '🔒' : '🔓'}</button>
-            ${ch.isUser ? `<button class="remove-btn" title="Remove provider" aria-label="Remove ${esc(ch.name)}">✕</button>` : ''}
-          </div>
-          <div class="slider-row">
-            <input type="range" min="1" max="100" step="1" value="${ch.value}" ${isSliderDisabled ? 'disabled' : ''} aria-label="${esc(ch.name)} detail level">
-          </div>
-          <div class="prefix-row">
-            <span class="prefix-label">Prefix</span>
-            <select class="prefix-select" aria-label="${esc(ch.name)} prefix">
-              <option value="Concise" ${ch.prefixType === 'Concise' ? 'selected' : ''}>Concise</option>
-              <option value="Detailed" ${ch.prefixType === 'Detailed' ? 'selected' : ''}>Detailed</option>
-              <option value="ELI5" ${ch.prefixType === 'ELI5' ? 'selected' : ''}>ELI5</option>
-              ${ch.prefixType === 'Custom' ? `<option value="Custom" selected>Custom</option>` : ''}
-            </select>
-            <button class="prefix-edit-btn" title="Edit custom prefix" aria-label="Edit custom prefix">✏️</button>
-          </div>
-          <div class="prefix-preview" title="${esc(currentPrefix)}">↳ ${esc(currentPrefix)}</div>
-        `;
-
-        // Checkbox state
-        const checkbox = row.querySelector('input[type="checkbox"]');
-        checkbox.onclick = (e) => e.stopPropagation();
-        checkbox.onchange = () => {
-          ch.checked = checkbox.checked;
-          row.classList.toggle('off', !ch.checked);
-          saveUiPrefs();
-          updateTimer();
-        };
-
-        // Per-model slider. A manual edit becomes the new baseline.
-        const slider = row.querySelector('input[type="range"]');
-        slider.oninput = () => {
-          ch.value = parseInt(slider.value, 10);
-          commitMasterBaseline();
-          applyHeat(row, ch.value);
-          saveUiPrefs();
-          updateHistory();
-          updateTimer();
-        };
-
-        // Model lock at the far right of the header row
-        const lockBtn = row.querySelector('.lock-btn');
-        lockBtn.onclick = (e) => {
-          e.stopPropagation();
-          if (ch.locked) {
-            ch.locked = false;
-            ch.lockedValue = null;
-          } else {
-            ch.locked = true;
-            ch.lockedValue = ch.value;
-          }
-          rebaseModel(ch);
-          saveUiPrefs();
-          renderLeft();
-          updateTimer();
-        };
-
-        // Prefix preset dropdown
-        const prefixSelect = row.querySelector('.prefix-select');
-        prefixSelect.onchange = (e) => {
-          e.stopPropagation();
-          ch.prefixType = prefixSelect.value;
-          ch.prefix = getPrefixText(ch);
-          saveUiPrefs();
-          renderLeft();
-        };
-
-        // Pencil -> shared modal -> store the custom string back on CH
-        const editBtn = row.querySelector('.prefix-edit-btn');
-        editBtn.onclick = async (e) => {
-          e.stopPropagation();
-          const current = ch.customPrefix || getPrefixText(ch);
-          const values = await showAppModal({
-            title: `Custom prefix for ${ch.name}`,
-            message: 'This prefix is prepended to your prompt for this model.',
-            confirmLabel: 'Use prefix',
-            fields: [{ name: 'prefix', label: 'Prefix text', value: current, required: true }]
-          });
-          if (!values) return;
-          ch.customPrefix = values.prefix.trim();
-          ch.prefixType = 'Custom';
-          ch.prefix = ch.customPrefix;
-          saveUiPrefs();
-          renderLeft();
-        };
-      }
-
-      // Interactive controls should not trigger row selection or row drag.
-      row.querySelectorAll('input, select, button').forEach(el => {
-        el.setAttribute('draggable', 'false');
-        el.onmousedown = (e) => e.stopPropagation();
-      });
-
-      // User-added providers can be removed; built-ins cannot.
-      const removeBtn = row.querySelector('.remove-btn');
-      if (removeBtn) {
-        removeBtn.onclick = async (e) => {
-          e.stopPropagation();
-          if (!confirm(`Remove ${ch.name}? You can add it again later.`)) return;
-          try {
-            const result = await window.api.removeProvider(ch.id);
-            if (!result?.ok) {
-              alert(result?.error || 'Could not remove the provider.');
-              return;
-            }
-          } catch (error) {
-            alert(`Could not remove the provider: ${error.message}`);
-            return;
-          }
-          forgetChannelPrefs(ch.id);
-          await refreshProviders();
-        };
-      }
-
-      // Clicking the row (outside a control/handle) toggles its checkbox.
-      row.onclick = (e) => {
-        if (e.target.closest('input, select, button, .grab-handle')) return;
-        ch.checked = !ch.checked;
+    // Model lock at the far right of the header row
+    const lockBtn = row.querySelector('.lock-btn');
+    if (lockBtn) {
+      lockBtn.onclick = (e) => {
+        e.stopPropagation();
+        const ch = row._ch;
+        if (!ch) return;
+        if (ch.locked) {
+          ch.locked = false;
+          ch.lockedValue = null;
+        } else {
+          ch.locked = true;
+          ch.lockedValue = ch.value;
+        }
+        rebaseModel(ch);
         saveUiPrefs();
         renderLeft();
         updateTimer();
       };
+    }
 
-      // HTML5 drag-and-drop: dropping on a lower row inserts after it,
-      // dropping on a higher row inserts before it.
-      row.ondragstart = (e) => {
-        if (e.target.closest('input, select, button')) {
-          e.preventDefault();
-          return;
-        }
-        draggedIdx = index;
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', String(index));
-        setTimeout(() => row.classList.add('dragging'), 0);
-      };
-
-      row.ondragover = (e) => {
-        if (draggedIdx === null) return;
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        row.classList.add('drag-over');
-      };
-
-      row.ondragleave = () => {
-        row.classList.remove('drag-over');
-      };
-
-      row.ondrop = (e) => {
-        e.preventDefault();
-        row.classList.remove('drag-over');
-        const from = draggedIdx !== null
-          ? draggedIdx
-          : parseInt(e.dataTransfer.getData('text/plain'), 10);
-        if (!Number.isInteger(from) || from === index) {
-          draggedIdx = null;
-          return;
-        }
-        const [movedItem] = CH.splice(from, 1);
-        CH.splice(index, 0, movedItem);
-        draggedIdx = null;
+    // Prefix preset dropdown
+    const prefixSelect = row.querySelector('.prefix-select');
+    if (prefixSelect) {
+      prefixSelect.onchange = (e) => {
+        e.stopPropagation();
+        const ch = row._ch;
+        if (!ch) return;
+        ch.prefixType = prefixSelect.value;
+        ch.prefix = getPrefixText(ch);
         saveUiPrefs();
         renderLeft();
       };
+    }
 
-      row.ondragend = () => {
-        draggedIdx = null;
-        document.querySelectorAll('.llm-row').forEach(r => {
-          r.classList.remove('dragging', 'drag-over');
+    // Pencil -> shared modal -> store the custom string back on CH
+    const editBtn = row.querySelector('.prefix-edit-btn');
+    if (editBtn) {
+      editBtn.onclick = async (e) => {
+        e.stopPropagation();
+        const ch = row._ch;
+        if (!ch) return;
+        const current = ch.customPrefix || getPrefixText(ch);
+        const values = await showAppModal({
+          title: `Custom prefix for ${ch.name}`,
+          message: 'This prefix is prepended to your prompt for this model.',
+          confirmLabel: 'Use prefix',
+          fields: [{ name: 'prefix', label: 'Prefix text', value: current, required: true }]
         });
+        if (!values) return;
+        ch.customPrefix = values.prefix.trim();
+        ch.prefixType = 'Custom';
+        ch.prefix = ch.customPrefix;
+        saveUiPrefs();
+        renderLeft();
       };
+    }
 
-      list.appendChild(row);
+    // Interactive controls should not trigger row selection or row drag.
+    row.querySelectorAll('input, select, button').forEach(el => {
+      el.setAttribute('draggable', 'false');
+      el.onmousedown = (e) => e.stopPropagation();
     });
 
-    const addBtn = document.createElement('button');
-    addBtn.className = 'add-custom-btn';
-    addBtn.textContent = '➕ Add Provider';
-    addBtn.title = 'Add a website scraper or an OpenAI-compatible API endpoint';
-    addBtn.onclick = addCustomProvider;
-    list.appendChild(addBtn);
+    // User-added providers can be removed; built-ins cannot.
+    const removeBtn = row.querySelector('.remove-btn');
+    if (removeBtn) {
+      removeBtn.onclick = async (e) => {
+        e.stopPropagation();
+        const ch = row._ch;
+        if (!ch) return;
+        if (!confirm(`Remove ${ch.name}? You can add it again later.`)) return;
+        try {
+          const result = await window.api.removeProvider(ch.id);
+          if (!result?.ok) {
+            alert(result?.error || 'Could not remove the provider.');
+            return;
+          }
+        } catch (error) {
+          alert(`Could not remove the provider: ${error.message}`);
+          return;
+        }
+        forgetChannelPrefs(ch.id);
+        await refreshProviders();
+      };
+    }
+
+    // Clicking the row (outside a control/handle) toggles its checkbox.
+    row.onclick = (e) => {
+      if (e.target.closest('input, select, button, .grab-handle')) return;
+      const ch = row._ch;
+      if (!ch) return;
+      ch.checked = !ch.checked;
+      saveUiPrefs();
+      renderLeft();
+      updateTimer();
+    };
+
+    // HTML5 drag-and-drop: dropping on a lower row inserts after it,
+    // dropping on a higher row inserts before it. The index is resolved from
+    // CH at event time, because rows are cached across reorders.
+    row.ondragstart = (e) => {
+      if (e.target.closest('input, select, button')) {
+        e.preventDefault();
+        return;
+      }
+      const ch = row._ch;
+      const index = ch ? CH.findIndex(c => c.id === ch.id) : -1;
+      if (index < 0) {
+        e.preventDefault();
+        return;
+      }
+      draggedIdx = index;
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', String(index));
+      setTimeout(() => row.classList.add('dragging'), 0);
+    };
+
+    row.ondragover = (e) => {
+      if (draggedIdx === null) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      row.classList.add('drag-over');
+    };
+
+    row.ondragleave = () => {
+      row.classList.remove('drag-over');
+    };
+
+    row.ondrop = (e) => {
+      e.preventDefault();
+      row.classList.remove('drag-over');
+      const from = draggedIdx !== null
+        ? draggedIdx
+        : parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const ch = row._ch;
+      const targetIndex = ch ? CH.findIndex(c => c.id === ch.id) : -1;
+      if (!Number.isInteger(from) || targetIndex < 0 || from === targetIndex) {
+        draggedIdx = null;
+        return;
+      }
+      const [movedItem] = CH.splice(from, 1);
+      CH.splice(targetIndex, 0, movedItem);
+      draggedIdx = null;
+      saveUiPrefs();
+      renderLeft();
+    };
+
+    row.ondragend = () => {
+      draggedIdx = null;
+      document.querySelectorAll('.llm-row').forEach(r => {
+        r.classList.remove('dragging', 'drag-over');
+      });
+    };
+  }
+
+  function renderLeft() {
+    const list = document.getElementById('llmList');
+    const seen = new Set();
+
+    CH.forEach((ch, index) => {
+      seen.add(ch.id);
+      let row = leftRows.get(ch.id);
+
+      // Only a structural change rebuilds a row; text, classes, and attributes
+      // are always updated in place so animations survive.
+      const signature = leftRowSignature(ch);
+      if (row && row.dataset.sig !== signature) {
+        row.remove();
+        leftRows.delete(ch.id);
+        row = null;
+      }
+      if (!row) {
+        row = createLeftRow(ch);
+        leftRows.set(ch.id, row);
+      }
+      updateLeftRow(row, ch, index);
+    });
+
+    // Drop rows for providers that no longer exist.
+    leftRows.forEach((row, id) => {
+      if (seen.has(id)) return;
+      row.remove();
+      leftRows.delete(id);
+    });
+
+    if (!leftAddBtn) {
+      leftAddBtn = document.createElement('button');
+      leftAddBtn.className = 'add-custom-btn';
+      leftAddBtn.textContent = '➕ Add Provider';
+      leftAddBtn.title = 'Add a website scraper or an OpenAI-compatible API endpoint';
+      leftAddBtn.onclick = addCustomProvider;
+    }
+
+    // Reorder only when the id order actually changed. appendChild() moves the
+    // cached nodes; no row is recreated.
+    const orderKey = CH.map(ch => ch.id).join('\u0000');
+    let orderChanged = orderKey !== leftOrderKey || leftAddBtn.parentNode !== list;
+    CH.forEach(ch => {
+      const row = leftRows.get(ch.id);
+      if (row && row.parentNode !== list) orderChanged = true;
+    });
+
+    if (orderChanged) {
+      CH.forEach(ch => {
+        const row = leftRows.get(ch.id);
+        if (row) list.appendChild(row);
+      });
+      list.appendChild(leftAddBtn);
+      leftOrderKey = orderKey;
+    }
   }
 
   // --- MASTER LOCK BUTTON ---
@@ -1381,167 +1525,393 @@
   }
   function stripScore(raw) { return (raw || '').replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
 
+  // --- CONVERSATION RENDERING ---
+  // One element per node, cached by turn id. Streaming writes into the cached
+  // body; a re-render only updates text/classes/attributes. appendChild() is
+  // used to reorder turns, never to rebuild them.
+  const turnEls = new Map();
+  let convOrderKey = '';
+
+  function createTurnEl(t) {
+    const el = document.createElement('div');
+    el.className = 'turn';
+    el.dataset.turn = t.id;
+
+    const head = document.createElement('div');
+    head.className = 'turn-head';
+
+    const tnum = document.createElement('span');
+    tnum.className = 'tnum';
+    const dot = document.createElement('span');
+    dot.textContent = '·';
+    const preview = document.createElement('span');
+    const ctxTag = document.createElement('span');
+    ctxTag.style.color = 'var(--accent)';
+    ctxTag.style.fontSize = '13px';
+    ctxTag.textContent = '· in context';
+    const logBtn = document.createElement('button');
+    logBtn.className = 'log-btn';
+    logBtn.title = 'Channel log';
+    logBtn.textContent = '📜';
+
+    head.append(tnum, dot, preview, ctxTag, logBtn);
+    el.appendChild(head);
+
+    const promptCard = document.createElement('div');
+    promptCard.className = 'prompt-card';
+    const who = document.createElement('div');
+    who.className = 'who';
+    who.textContent = 'You';
+    const promptText = document.createElement('span');
+    promptCard.append(who, promptText);
+    el.appendChild(promptCard);
+
+    const host = document.createElement('div');
+    el.appendChild(host);
+
+    el._tnum = tnum;
+    el._preview = preview;
+    el._ctxTag = ctxTag;
+    el._promptText = promptText;
+    el._host = host;
+    el._mode = null;
+    el._card = null;
+    return el;
+  }
+
+  function buildHybridCard(t) {
+    const turnId = t.id;
+    const el = document.createElement('div');
+    el.className = 'hybrid-card';
+
+    const label = document.createElement('div');
+    label.className = 'hybrid-label';
+    label.textContent = `${HYB} Hybrid`;
+
+    const body = document.createElement('div');
+    body.className = 'hybrid-body';
+    body.dataset.kind = 'hybrid';
+
+    const scoreBar = document.createElement('div');
+    scoreBar.className = 'score-bar';
+    const pct = document.createElement('span');
+    pct.className = 'pct';
+    const reason = document.createElement('span');
+    reason.className = 'reason';
+    scoreBar.append(pct, reason);
+    scoreBar.onclick = (e) => { e.stopPropagation(); scoreBar.classList.toggle('open'); };
+
+    const sourceBar = document.createElement('div');
+    sourceBar.className = 'source-bar';
+    const spacer = document.createElement('span');
+    spacer.className = 'spacer';
+
+    const sourcesBtn = document.createElement('button');
+    sourcesBtn.className = 'bar-act';
+    sourcesBtn.dataset.act = 'sources';
+    sourcesBtn.textContent = '⊞ View Sources';
+    sourcesBtn.onclick = (e) => {
+      e.stopPropagation();
+      const turn = convo.nodes[turnId];
+      if (!turn) return;
+      (turn.hybrid.sources || []).forEach(id => setOpen(turn, id, true));
+      renderConv();
+    };
+
+    const allBtn = document.createElement('button');
+    allBtn.className = 'bar-act';
+    allBtn.dataset.act = 'all';
+    allBtn.textContent = '⊞ Expand All';
+    allBtn.onclick = (e) => {
+      e.stopPropagation();
+      const turn = convo.nodes[turnId];
+      if (!turn) return;
+      const anyClosed = (turn.order || []).some(id => !isOpen(turn, id));
+      (turn.order || []).forEach(id => setOpen(turn, id, anyClosed));
+      renderConv();
+    };
+
+    sourceBar.append(spacer, sourcesBtn, allBtn);
+    el.append(label, body, scoreBar, sourceBar);
+
+    return {
+      el,
+      turnId,
+      mode: 'hybrid',
+      label,
+      body,
+      scoreBar,
+      pct,
+      reason,
+      sourceBar,
+      spacer,
+      emojiEls: new Map(),
+      emojiOrder: '',
+      srcEls: new Map(),
+      srcOrder: ''
+    };
+  }
+
+  function buildReplyCard(t) {
+    const turnId = t.id;
+    const el = document.createElement('div');
+    el.className = 'hybrid-card';
+
+    const label = document.createElement('div');
+    label.className = 'hybrid-label';
+
+    const body = document.createElement('div');
+    body.className = 'hybrid-body';
+    body.dataset.kind = 'reply';
+
+    const scoreBar = document.createElement('div');
+    scoreBar.className = 'score-bar';
+    scoreBar.style.display = 'none';
+    const pct = document.createElement('span');
+    pct.className = 'pct';
+    const reason = document.createElement('span');
+    reason.className = 'reason';
+    scoreBar.append(pct, reason);
+    scoreBar.onclick = (e) => { e.stopPropagation(); scoreBar.classList.toggle('open'); };
+
+    el.append(label, body, scoreBar);
+
+    return { el, turnId, mode: 'reply', label, body, scoreBar, pct, reason };
+  }
+
+  function createSourceEl() {
+    const el = document.createElement('div');
+    el.className = 'src-reply';
+
+    const head = document.createElement('div');
+    head.className = 'src-head';
+    const name = document.createElement('span');
+    const time = document.createElement('span');
+    time.className = 'time';
+    const pct = document.createElement('span');
+    pct.className = 'pct';
+    head.append(name, time, pct);
+
+    const text = document.createElement('span');
+    const reason = document.createElement('div');
+    reason.className = 'src-reason';
+    el.append(head, text, reason);
+
+    return { el, name, time, pct, text, reason };
+  }
+
+  function updateSourceEl(refs, id, t) {
+    let src = refs.srcEls.get(id);
+    if (!src) {
+      src = createSourceEl();
+      refs.srcEls.set(id, src);
+    }
+    const ch = CH.find(x => x.id === id);
+    const reply = replyOf(t, id);
+    if (!ch || !reply) return src;
+
+    const raw = reply.text || '';
+    const parsed = parseScore(raw);
+    const pctValue = parsed.score != null ? Math.round(parsed.score * 10) : null;
+    const secs = reply.ms ? (reply.ms / 1000).toFixed(1) + 's' : '';
+    const body = stripScore(raw);
+
+    src.el.classList.toggle('open', isOpen(t, id));
+    src.name.textContent = `${ch.emoji} ${ch.name}`;
+    src.time.textContent = secs;
+
+    if (pctValue != null) {
+      src.pct.style.display = '';
+      src.pct.className = 'pct ' + scoreClass(pctValue);
+      src.pct.textContent = `🎯 ${pctValue}%`;
+    } else {
+      src.pct.style.display = 'none';
+    }
+
+    if (src.text.textContent !== body) src.text.textContent = body;
+    src.reason.style.display = parsed.reason ? '' : 'none';
+    if (parsed.reason && src.reason.textContent !== parsed.reason) {
+      src.reason.textContent = parsed.reason;
+    }
+    return src;
+  }
+
+  function updateHybridCard(refs, t) {
+    const hybrid = t.hybrid;
+    const text = hybrid.text || '';
+    if (refs.body.textContent !== text) refs.body.textContent = text;
+
+    const score = Number(hybrid.score) || 0;
+    const open = refs.scoreBar.classList.contains('open');
+    refs.scoreBar.className = 'score-bar ' + scoreClass(score) + (open ? ' open' : '');
+    refs.scoreBar.style.display = '';
+    refs.pct.textContent = `🎯 ${score}%`;
+    if (refs.reason.textContent !== (hybrid.reason || '')) {
+      refs.reason.textContent = hybrid.reason || '';
+    }
+
+    // Source emoji buttons, keyed by channel id.
+    const order = (t.order || []).filter(id => CH.some(ch => ch.id === id));
+    const wanted = new Set(order);
+    refs.emojiEls.forEach((btn, id) => {
+      if (wanted.has(id)) return;
+      btn.remove();
+      refs.emojiEls.delete(id);
+    });
+
+    order.forEach(id => {
+      const ch = CH.find(x => x.id === id);
+      let btn = refs.emojiEls.get(id);
+      if (!btn) {
+        btn = document.createElement('button');
+        btn.className = 'src-emoji';
+        btn.dataset.id = id;
+        btn.onclick = (e) => {
+          e.stopPropagation();
+          const turn = convo.nodes[refs.turnId];
+          if (!turn) return;
+          setOpen(turn, id, !isOpen(turn, id));
+          renderConv();
+        };
+        refs.emojiEls.set(id, btn);
+      }
+      const omitted = hybrid.omitted && hybrid.omitted[id];
+      const isSrc = (hybrid.sources || []).includes(id);
+      btn.textContent = ch.emoji;
+      btn.className = 'src-emoji'
+        + (isOpen(t, id) ? ' on' : '')
+        + (omitted || !isSrc ? ' omitted' : '');
+      btn.title = ch.name + (omitted ? ' — omitted: ' + omitted : '');
+    });
+
+    const emojiOrder = JSON.stringify(order);
+    if (emojiOrder !== refs.emojiOrder) {
+      order.forEach(id => refs.sourceBar.insertBefore(refs.emojiEls.get(id), refs.spacer));
+      refs.emojiOrder = emojiOrder;
+    }
+
+    // Expanded source replies, keyed by channel id.
+    const sourceIds = order.filter(id => replyOf(t, id));
+    const wantedSources = new Set(sourceIds);
+    refs.srcEls.forEach((src, id) => {
+      if (wantedSources.has(id)) return;
+      src.el.remove();
+      refs.srcEls.delete(id);
+    });
+    sourceIds.forEach(id => updateSourceEl(refs, id, t));
+
+    const srcOrder = JSON.stringify(sourceIds);
+    if (srcOrder !== refs.srcOrder) {
+      sourceIds.forEach(id => {
+        const src = refs.srcEls.get(id);
+        if (src) refs.el.appendChild(src.el);
+      });
+      refs.srcOrder = srcOrder;
+    }
+  }
+
+  function updateReplyCard(refs, t) {
+    const reply = replyOf(t, activeTab);
+    if (!reply) return;
+    const ch = CH.find(c => c.id === activeTab) || {};
+    const raw = reply.text || '';
+    const parsed = parseScore(raw);
+    const pctValue = parsed.score != null ? Math.round(parsed.score * 10) : null;
+    const body = stripScore(raw);
+
+    const label = `${ch.emoji || ''} ${ch.name || ''}`.trim();
+    if (refs.label.textContent !== label) refs.label.textContent = label;
+    if (refs.body.textContent !== body) refs.body.textContent = body;
+
+    if (pctValue == null) {
+      refs.scoreBar.style.display = 'none';
+      return;
+    }
+    refs.scoreBar.style.display = '';
+    const open = refs.scoreBar.classList.contains('open');
+    refs.scoreBar.className = 'score-bar ' + scoreClass(pctValue) + (open ? ' open' : '');
+    refs.pct.textContent = `🎯 ${pctValue}%`;
+    if (refs.reason.textContent !== (parsed.reason || '')) {
+      refs.reason.textContent = parsed.reason || '';
+    }
+  }
+
+  function updateTurnEl(el, t, index, inCtx) {
+    el.classList.toggle('in-ctx', inCtx);
+    if (t.locked) el.dataset.locked = '1'; else delete el.dataset.locked;
+
+    el._tnum.textContent = `▶ T${index + 1}`;
+    const preview = `${t.prompt.slice(0, 60)}${t.prompt.length > 60 ? '…' : ''}`;
+    if (el._preview.textContent !== preview) el._preview.textContent = preview;
+    el._ctxTag.hidden = !inCtx;
+    if (el._promptText.textContent !== t.prompt) el._promptText.textContent = t.prompt;
+
+    const mode = activeTab === 'hybrid'
+      ? (t.hybrid ? 'hybrid' : 'none')
+      : (replyOf(t, activeTab) ? 'reply' : 'none');
+
+    if (mode === 'none') {
+      if (el._mode !== 'none') {
+        el._host.innerHTML = '';
+        el._card = null;
+        el._mode = 'none';
+      }
+      return;
+    }
+
+    // The turn element survives tab switches; only the card skeleton inside it
+    // is rebuilt when the card kind changes.
+    if (el._mode !== mode) {
+      el._host.innerHTML = '';
+      el._card = mode === 'hybrid' ? buildHybridCard(t) : buildReplyCard(t);
+      el._host.appendChild(el._card.el);
+      el._mode = mode;
+    }
+
+    if (mode === 'hybrid') updateHybridCard(el._card, t);
+    else updateReplyCard(el._card, t);
+  }
+
   function renderConv() {
     const wrap = document.getElementById('convWrap');
-    wrap.innerHTML = '';
     const depth = parseInt(document.getElementById('hsRange').value, 10) || 0;
     const path = activePath();
     // Context is the last `depth` nodes of the active path.
     const ctxStart = Math.max(0, path.length - depth);
+    const seen = new Set();
 
     path.forEach((t, idx) => {
-      const inCtx = idx >= ctxStart;
-      const el = document.createElement('div');
-      el.className = 'turn' + (inCtx ? ' in-ctx' : '');
-      el.dataset.turn = t.id;
-      if (t.locked) el.dataset.locked = '1';
-
-      const head = document.createElement('div');
-      head.className = 'turn-head';
-      head.innerHTML = `<span class="tnum">▶ T${idx + 1}</span>
-        <span>·</span>
-        <span>${esc(t.prompt.slice(0, 60))}${t.prompt.length > 60 ? '…' : ''}</span>
-        ${inCtx ? '<span style="color:var(--accent);font-size:13px">· in context</span>' : ''}
-        <button class="log-btn" title="Channel log">📜</button>`;
-      el.appendChild(head);
-
-      const p = document.createElement('div');
-      p.className = 'prompt-card';
-      p.innerHTML = '<div class="who">You</div>';
-      p.appendChild(document.createTextNode(t.prompt));
-      el.appendChild(p);
-
-      if (activeTab === 'hybrid' && t.hybrid) {
-        const card = document.createElement('div');
-        card.className = 'hybrid-card';
-
-        const lbl = document.createElement('div');
-        lbl.className = 'hybrid-label';
-        lbl.textContent = `${HYB} Hybrid`;
-        card.appendChild(lbl);
-
-        const body = document.createElement('div');
-        body.className = 'hybrid-body';
-        body.dataset.kind = 'hybrid';
-        body.textContent = t.hybrid.text;
-        card.appendChild(body);
-
-        const sb = document.createElement('div');
-        sb.className = 'score-bar ' + scoreClass(t.hybrid.score);
-        sb.innerHTML = `<span class="pct">🎯 ${t.hybrid.score}%</span>
-          <span class="reason">${t.hybrid.reason || ''}</span>`;
-        sb.onclick = (e) => { e.stopPropagation(); sb.classList.toggle('open'); };
-        card.appendChild(sb);
-
-        const bar = document.createElement('div');
-        bar.className = 'source-bar';
-
-        const emojiButtons = (t.order || []).map(id => {
-          const ch = CH.find(x => x.id === id);
-          if (!ch) return '';
-          const omitted = t.hybrid.omitted && t.hybrid.omitted[id];
-          const isSrc = (t.hybrid.sources || []).includes(id);
-          const cls = 'src-emoji'
-            + (isOpen(t, id) ? ' on' : '')
-            + (omitted ? ' omitted' : '')
-            + (!isSrc && !omitted ? ' omitted' : '');
-          return `<button class="${cls}" data-id="${id}" title="${ch.name}${omitted ? ' — omitted: ' + omitted : ''}">${ch.emoji}</button>`;
-        }).join('');
-
-        bar.innerHTML = `${emojiButtons}
-          <span class="spacer"></span>
-          <button class="bar-act" data-act="sources">⊞ View Sources</button>
-          <button class="bar-act" data-act="all">⊞ Expand All</button>`;
-
-        bar.querySelectorAll('.src-emoji').forEach(btn => {
-          btn.onclick = (e) => {
-            e.stopPropagation();
-            const id = btn.dataset.id;
-            setOpen(t, id, !isOpen(t, id));
-            renderConv();
-          };
-        });
-        bar.querySelector('[data-act="sources"]').onclick = (e) => {
-          e.stopPropagation();
-          (t.hybrid.sources || []).forEach(id => setOpen(t, id, true));
-          renderConv();
-        };
-        bar.querySelector('[data-act="all"]').onclick = (e) => {
-          e.stopPropagation();
-          const anyClosed = (t.order || []).some(id => !isOpen(t, id));
-          (t.order || []).forEach(id => setOpen(t, id, anyClosed));
-          renderConv();
-        };
-        card.appendChild(bar);
-
-        (t.order || []).forEach(id => {
-          const ch = CH.find(x => x.id === id);
-          if (!ch) return;
-          const reply = replyOf(t, id);
-          if (!reply) return;
-          const raw = reply.text || '';
-          const parsed = parseScore(raw);
-          const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
-          const replyBody = stripScore(raw);
-          const secs = reply.ms ? (reply.ms / 1000).toFixed(1) + 's' : '';
-
-          const sr = document.createElement('div');
-          sr.className = 'src-reply' + (isOpen(t, id) ? ' open' : '');
-          const head2 = document.createElement('div');
-          head2.className = 'src-head';
-          head2.innerHTML = `<span>${ch.emoji} ${esc(ch.name)}</span>
-            <span class="time">${secs}</span>
-            ${pct != null ? `<span class="pct ${scoreClass(pct)}">🎯 ${pct}%</span>` : ''}`;
-          sr.appendChild(head2);
-          sr.appendChild(document.createTextNode(replyBody));
-          if (parsed.reason) {
-            const rr = document.createElement('div');
-            rr.className = 'src-reason';
-            rr.textContent = parsed.reason;
-            sr.appendChild(rr);
-          }
-          card.appendChild(sr);
-        });
-
-        el.appendChild(card);
+      seen.add(t.id);
+      let el = turnEls.get(t.id);
+      if (!el) {
+        el = createTurnEl(t);
+        turnEls.set(t.id, el);
       }
-
-      if (activeTab !== 'hybrid') {
-        const reply = replyOf(t, activeTab);
-        if (reply) {
-          const raw = reply.text || '';
-          const parsed = parseScore(raw);
-          const pct = parsed.score != null ? Math.round(parsed.score * 10) : null;
-          const replyBody = stripScore(raw);
-          const ch = CH.find(c => c.id === activeTab) || {};
-
-          const card = document.createElement('div');
-          card.className = 'hybrid-card';
-          const head3 = document.createElement('div');
-          head3.className = 'hybrid-label';
-          head3.textContent = `${ch.emoji || ''} ${ch.name || ''}`;
-          card.appendChild(head3);
-
-          const bd = document.createElement('div');
-          bd.className = 'hybrid-body';
-          bd.dataset.kind = 'reply';
-          bd.textContent = replyBody;
-          card.appendChild(bd);
-
-          if (pct != null) {
-            const sb = document.createElement('div');
-            sb.className = 'score-bar ' + scoreClass(pct);
-            sb.innerHTML = `<span class="pct">🎯 ${pct}%</span>
-              <span class="reason">${parsed.reason}</span>`;
-            sb.onclick = (e) => { e.stopPropagation(); sb.classList.toggle('open'); };
-            card.appendChild(sb);
-          }
-          el.appendChild(card);
-        }
-      }
-
-      wrap.appendChild(el);
+      updateTurnEl(el, t, idx, idx >= ctxStart);
     });
+
+    // Drop turns that are no longer on the active path.
+    turnEls.forEach((el, id) => {
+      if (seen.has(id)) return;
+      el.remove();
+      turnEls.delete(id);
+    });
+
+    // Reorder only when the path order changed or an element is not attached.
+    const orderKey = JSON.stringify(path.map(t => t.id));
+    let orderChanged = orderKey !== convOrderKey || wrap.children.length !== path.length;
+    path.forEach(t => {
+      const el = turnEls.get(t.id);
+      if (el && el.parentNode !== wrap) orderChanged = true;
+    });
+
+    if (orderChanged) {
+      path.forEach(t => {
+        const el = turnEls.get(t.id);
+        if (el) wrap.appendChild(el);
+      });
+      convOrderKey = orderKey;
+    }
   }
 
   // --- HISTORY CONTEXT CALCULATIONS ---
@@ -1833,8 +2203,12 @@
       turn.hybrid.text += chunk || '';
       turn.hybrid.status = 'streaming';
 
-      // Target by turn id, not position (B2). No full re-render per chunk.
-      const hybridBody = document.querySelector(`[data-turn="${turnId}"] .hybrid-body[data-kind="hybrid"]`);
+      // Target the cached turn element, not "the last .hybrid-body" (B2). The
+      // keyed renderer keeps the body alive, so streaming writes are not lost.
+      const turnEl = turnEls.get(turnId);
+      const hybridBody = turnEl
+        ? turnEl.querySelector('.hybrid-body[data-kind="hybrid"]')
+        : null;
       if (hybridBody) {
         hybridBody.textContent = turn.hybrid.text;
         const centerPanel = document.querySelector('.center');
