@@ -3,540 +3,334 @@
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://localhost:8000 https:; img-src 'self' data:;">
-<title>LLM Explorer</title>
+<title>LLM Explorer — Cockpit</title>
 <script src="node_modules/animejs/dist/bundles/anime.umd.min.js"></script>
 <style>
   :root {
-    --bg:#0f1115; --panel:#171a21; --panel-2:#1d2129; --border:#2a2f3a;
-    --text:#e6e8ee; --muted:#8a92a6; --accent:#6ea8fe; --accent-2:#4f7dd6;
-    --amber:#f0b429; --green:#3fb950; --red:#f85149; --purple:#a371f7;
-    --radius:8px;
+    --bg-dark: #07080a;
+    --panel-glass: rgba(17, 19, 25, 0.85);
+    --border: #2a2f3a;
+    --accent: #00f0ff;
+    --accent-glow: rgba(0, 240, 255, 0.3);
+    --accent-2: #ff0055;
+    --text: #e2e8f0;
+    --text-muted: #7a869a;
+    --font-main: 'Inter', system-ui, sans-serif;
+    --radius: 8px;
   }
-  * { box-sizing: border-box; }
-  html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
-    font:18px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    background-color: var(--bg-dark);
+    background-image: radial-gradient(circle at 15% 50%, rgba(0, 240, 255, 0.04), transparent 25%), radial-gradient(circle at 85% 30%, rgba(255, 0, 85, 0.04), transparent 25%);
+    color: var(--text);
+    font-family: var(--font-main);
+    height: 100vh;
+    display: flex;
+    overflow: hidden;
+  }
 
-  /* --sidebar-w is animated by Anime.js between the full 260px panel and the
-     50px mini-rail. It falls back to the static 260px without JS. */
-  .app { display:grid; height:100vh;
-    --sidebar-w: 260px;
-    grid-template-columns: var(--sidebar-w) 1fr;
-    grid-template-rows: auto 1fr auto;
-    grid-template-areas: "top top" "left center" "bottom bottom"; }
+  /* --- MAIN GRID LAYOUT --- */
+  .app { 
+    display: grid; 
+    grid-template-columns: 280px 1fr 340px; 
+    width: 100%; height: 100vh; gap: 16px; padding: 16px;
+    transition: all 0.3s ease;
+  }
 
-  /* ---- Top ---- */
-  .topbar { grid-area: top; display:flex; align-items:flex-end; gap:8px;
-    padding:6px 10px 0; border-bottom:1px solid var(--border); background:var(--panel);
-    position:relative; }
-  .sidebar-toggle { background:transparent; border:1px solid var(--border);
-    border-radius:6px; color:var(--text); padding:6px 10px; margin-bottom:4px;
-    font:inherit; font-size:18px; line-height:1; cursor:pointer; flex-shrink:0; }
-  .sidebar-toggle:hover { border-color:var(--accent); }
-  .sidebar-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .rail { 
+    background: var(--panel-glass); backdrop-filter: blur(12px); 
+    border: 1px solid var(--border); border-radius: 16px; 
+    display: flex; flex-direction: column; overflow: hidden; 
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); 
+    min-width: 0;
+  }
 
-  .tabs { display:flex; gap:3px; flex:1; overflow-x:auto; }
-  .tab { padding:8px 14px; border:1px solid transparent; border-bottom:none;
-    border-radius:6px 6px 0 0; background:transparent; color:var(--muted);
-    cursor:pointer; font-size:18px; white-space:nowrap; font-family:inherit; }
-  .tab.active { background:var(--bg); color:var(--text); border-color:var(--border); }
-  .branch-pill, .legend-pill { font-size:16px; color:var(--muted); padding:6px 11px;
-    border:1px solid var(--border); border-radius:6px; cursor:pointer;
-    white-space:nowrap; margin-bottom:4px; background:transparent; font:inherit; }
-  .branch-pill:hover, .legend-pill:hover { border-color:var(--accent); color:var(--text); }
-  .legend-pill.open { border-color:var(--accent); color:var(--text); }
+  .rail-header { 
+    padding: 16px; border-bottom: 1px solid var(--border); 
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; 
+    color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; 
+  }
 
-  .legend-drop { position:absolute; top:calc(100% + 4px); right:60px;
-    background:var(--panel-2); border:1px solid var(--accent);
-    border-radius:10px; padding:14px; width:380px;
-    box-shadow:0 12px 40px rgba(0,0,0,.7); z-index:50;
-    display:none; font-size:16px; }
-  .legend-drop.open { display:block; }
-  .legend-drop .ld-head { display:flex; align-items:center; gap:6px;
-    font-size:13px; letter-spacing:.1em; text-transform:uppercase;
-    color:var(--accent); margin-bottom:8px; }
-  .legend-drop .ld-head .spacer { flex:1; }
-  .legend-drop .ctx-switch { display:flex; gap:3px; margin-bottom:10px; }
-  .legend-drop .ctx-switch button { flex:1; padding:6px 8px; font-size:14px;
-    background:var(--panel); border:1px solid var(--border); border-radius:4px;
-    color:var(--muted); cursor:pointer; }
-  .legend-drop .ctx-switch button.active { color:var(--text); border-color:var(--accent); }
-  .legend-drop .legend-list { display:flex; flex-direction:column; gap:8px;
-    max-height:400px; overflow-y:auto; }
-  .legend-drop .legend-item { display:flex; gap:10px; align-items:flex-start; }
-  .legend-drop .legend-item .ico { min-width:28px; font-size:20px; text-align:center; }
-  .legend-drop .legend-item .txt { color:var(--muted); line-height:1.4; }
+  /* --- LEFT RAIL (Models) --- */
+  .leftbar { width: 280px; }
+  .lb-full { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .mini-rail { display: none; } /* Hidden in desktop, used for collapse */
+  
+  .llm-list-container { display: flex; flex-direction: column; gap: 8px; }
+  
+  /* The JS dynamically creates .llm-row. We style it for the cockpit. */
+  .llm-row { 
+    background: rgba(0,0,0,0.3); border: 1px solid var(--border); 
+    border-radius: 8px; padding: 10px; display: grid; 
+    grid-template-columns: minmax(0, 1fr) 16px;
+    grid-template-areas: "head rail" "slider rail" "preview rail";
+    column-gap: 4px; row-gap: 6px; cursor: pointer; 
+    transition: 0.2s; position: relative; user-select: none;
+  }
+  .llm-row:hover { border-color: var(--accent); }
+  .llm-row.off { opacity: 0.5; }
+  .llm-row.static-row { grid-template-areas: "head rail"; row-gap: 0; }
+  
+  .llm-head { grid-area: head; display: flex; align-items: center; gap: 6px; font-size: 14px; min-width: 0; }
+  .grab-handle { cursor: grab; color: var(--text-muted); font-size: 14px; opacity: 0.6; }
+  .grab-handle:hover { opacity: 1; color: var(--text); }
+  .llm-head input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+  .llm-name { flex: 1; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  
+  .slider-row { grid-area: slider; display: flex; align-items: center; gap: 8px; }
+  .slider-row input[type="range"] { flex: 1; accent-color: var(--accent); cursor: pointer; height: 4px; }
+  
+  .prefix-preview { grid-area: preview; font-size: 11px; color: var(--text-muted); font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px; }
+  .row-rail { grid-area: rail; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 2px; }
+  .reorder-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; font-size: 10px; }
+  .reorder-btn:hover:not(:disabled) { color: var(--text); }
+  .reorder-btn:disabled { opacity: 0.2; }
 
-  /* ---- Left ---- */
-  /* The grid track animates 260px <-> 50px. `.lb-full` keeps its fixed width
-     and is clipped by the 50px rail while it cross-fades out, so no reflow of
-     the model rows happens mid-animation. */
-  .leftbar { grid-area: left; border-right:1px solid var(--border);
-    background:var(--panel); overflow:hidden; position:relative;
-    display:flex; min-width:0; }
-  .lb-full { flex:0 0 260px; width:260px; height:100%; padding:12px 6px;
-    overflow-y:auto; overflow-x:hidden; display:flex; flex-direction:column;
-    gap:12px; min-height:0;
-    transition:opacity .18s ease, visibility 0s; }
-  .leftbar.collapsed .lb-full { opacity:0; visibility:hidden;
-    pointer-events:none; transition:opacity .18s ease, visibility 0s .18s; }
-
-  /* Mini-rail shown while collapsed: hamburger + active model emojis. */
-  .mini-rail { position:absolute; inset:0; z-index:2; width:50px;
-    background:var(--panel); display:flex; flex-direction:column;
-    align-items:center; gap:8px; padding:10px 0;
-    opacity:0; visibility:hidden; pointer-events:none;
-    transition:opacity .18s ease, visibility 0s .18s; }
-  .leftbar.collapsed .mini-rail { opacity:1; visibility:visible;
-    pointer-events:auto; transition:opacity .18s ease, visibility 0s; }
-  .mini-toggle { background:transparent; border:1px solid var(--border);
-    border-radius:6px; color:var(--text); padding:6px; width:34px; height:32px;
-    font:inherit; font-size:16px; line-height:1; cursor:pointer; flex-shrink:0; }
-  .mini-toggle:hover { border-color:var(--accent); }
-  .mini-toggle:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-  .mini-emojis { display:flex; flex-direction:column; align-items:center;
-    gap:6px; width:100%; overflow-y:auto; overflow-x:hidden; }
-  .mini-emojis::-webkit-scrollbar { width:0; }
-  .mini-emoji { width:34px; height:30px; display:flex; align-items:center;
-    justify-content:center; font-size:18px; line-height:1;
-    background:var(--panel-2); border:1px solid var(--border); border-radius:7px; }
-  .mini-empty { color:var(--muted); font-size:13px; opacity:.6; }
-  /* The topbar toggle stays in the layout (no tab jump) but hands over to the
-     mini-rail hamburger while collapsed. */
-  .app.sidebar-collapsed .topbar .sidebar-toggle { visibility:hidden; }
-  .lb-section { font-size:13px; letter-spacing:.1em; text-transform:uppercase;
-    color:var(--muted); padding:2px 0; font-weight:600; }
-  .master-slider { background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); padding:10px 12px; }
-  .master-slider .head { display:flex; align-items:center; gap:8px;
-    margin-bottom:8px; }
-  .master-slider .label { font-size:15px; color:var(--muted); font-weight:500; }
-  .master-slider .head .spacer { flex:1; }
-  .master-delta { font-size:13px; font-weight:600; color:var(--muted);
-    font-variant-numeric:tabular-nums; min-width:34px; }
-  .master-delta.up { color:var(--amber); }
-  .master-delta.down { color:var(--accent); }
-
-  .slider-row { display:flex; align-items:center; gap:8px; width:100%; }
-  .slider-row input[type="range"] { flex:1; accent-color:var(--amber);
-    height:6px; cursor:pointer; margin:0; }
-  .slider-row input[type="range"]:disabled { opacity:.45; cursor:not-allowed; }
-
-  .lock-btn { background:transparent; border:1px solid transparent;
-    color:var(--muted); cursor:pointer; padding:2px 6px;
-    border-radius:4px; font-size:17px; opacity:.4; line-height:1;
-    transition:all .15s ease; }
-  .lock-btn:hover { background:rgba(255,255,255,.08); opacity:.85; }
-  .lock-btn.on { opacity:1; border-color:var(--accent);
-    filter:drop-shadow(0 0 4px var(--accent)); color:#fff; }
-
-  .remove-btn { background:transparent; border:1px solid transparent;
-    color:var(--muted); cursor:pointer; padding:2px 6px;
-    border-radius:4px; font-size:13px; opacity:.4; line-height:1;
-    transition:all .15s ease; }
-  .remove-btn:hover { background:rgba(255,107,107,.12); opacity:1; color:#ff6b6b; }
-
-  .trio-toggle { display:flex; align-items:center; gap:8px; padding:10px 12px;
-    background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); cursor:pointer; font-size:15px; user-select:none; }
-  .trio-toggle:hover { border-color:var(--green); }
-  .trio-toggle.on { border-color:var(--green); color:var(--green); }
-  .trio-toggle .sw { width:36px; height:20px; border-radius:12px;
-    background:var(--border); position:relative; transition:background .15s; flex-shrink:0; }
-  .trio-toggle.on .sw { background:var(--green); }
-  .trio-toggle .sw::after { content:''; position:absolute; top:2px; left:2px;
-    width:16px; height:16px; border-radius:50%; background:#fff;
-    transition:transform .15s; }
-  .trio-toggle.on .sw::after { transform:translateX(16px); }
-
-  .llm-list-container { display:flex; flex-direction:column; gap:8px; }
-
-  /* Rows use a slim right rail for the reorder arrows, so the arrows never eat
-     into the header space. Rows fill the sidebar edge-to-edge. */
-  .llm-row { padding:8px; border:1px solid var(--border); background:var(--panel-2);
-    border-radius:8px; display:grid; grid-template-columns:minmax(0, 1fr) 16px;
-    grid-template-areas:"head rail" "slider rail" "preview rail";
-    column-gap:4px; row-gap:6px;
-    cursor:pointer; transition:border-color .18s, background-color .18s, box-shadow .18s;
-    user-select:none; position:relative; }
-  .llm-row:hover { border-color:var(--accent); }
-  .llm-row.off { opacity:.45; }
-  .llm-row.static-row { grid-template-areas:"head rail"; row-gap:0; }
-
-  /* Visual heat: the whole row body and border shift from cool deep blue at
-     low values to warm orange/red at high values. --heat-rgb / --heat-a /
-     --heat-a-2 / --heat-border-a / --heat-glow are set per row in applyHeat(). */
+  /* Heat Styling (from your JS) */
   .llm-row.heat-row {
     border-color: rgba(var(--heat-rgb, 74, 158, 255), var(--heat-border-a, .35));
-    background-color: var(--panel-2);
-    background-image: linear-gradient(135deg,
-      rgba(var(--heat-rgb, 74, 158, 255), var(--heat-a, .16)) 0%,
-      rgba(var(--heat-rgb, 74, 158, 255), var(--heat-a-2, .08)) 100%);
-    box-shadow:
-      0 0 calc(var(--heat-glow, 0) * 1px) rgba(var(--heat-rgb, 74, 158, 255), .45),
-      inset 0 0 calc(var(--heat-glow, 0) * .6px) rgba(var(--heat-rgb, 74, 158, 255), .22);
+    background-image: linear-gradient(135deg, rgba(var(--heat-rgb, 74, 158, 255), var(--heat-a, .16)) 0%, rgba(var(--heat-rgb, 74, 158, 255), var(--heat-a-2, .08)) 100%);
+    box-shadow: 0 0 calc(var(--heat-glow, 0) * 1px) rgba(var(--heat-rgb, 74, 158, 255), .45), inset 0 0 calc(var(--heat-glow, 0) * .6px) rgba(var(--heat-rgb, 74, 158, 255), .22);
   }
-  .llm-row.heat-row:hover {
-    border-color: rgba(var(--heat-rgb, 74, 158, 255), 1);
-  }
-
-  /* Max heat: declared after the heat rules so the red glow wins. Anime.js
-     pulses borderColor between red and yellow while this class is present. */
-  .llm-row.maxed {
-    border-color: var(--red);
-    box-shadow:
-      0 0 16px rgba(248, 81, 73, .65),
-      inset 0 0 8px rgba(248, 81, 73, .28);
-  }
-
-  /* Drag feedback is declared after the heat rules so it wins the cascade:
-     .llm-row.heat-row would otherwise override the drag border/glow. */
+  .llm-row.maxed { border-color: var(--accent-2); box-shadow: 0 0 16px rgba(248, 81, 73, .65); }
   .llm-row.dragging { opacity:.35; border:1px dashed var(--accent); }
-  .llm-row.drag-over { border-color:var(--accent);
-    box-shadow:0 -2px 0 0 var(--accent), 0 0 0 1px var(--accent) inset; }
+  .llm-row.drag-over { border-color:var(--accent); box-shadow:0 -2px 0 0 var(--accent); }
 
-  .llm-head { grid-area:head; display:flex; align-items:center; gap:4px;
-    font-size:16px; min-width:0; }
-  .llm-head [hidden] { display:none !important; }
-  .grab-handle { cursor:grab; color:var(--muted); font-size:14px; user-select:none;
-    padding:0 1px 0 0; display:inline-flex; align-items:center; line-height:1; opacity:.6; }
-  .grab-handle:hover { opacity:1; color:var(--text); }
-  .grab-handle:active { cursor:grabbing; }
+  .master-slider { background: rgba(0,0,0,0.4); border: 1px solid var(--border); border-radius: 8px; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .master-slider .head { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); }
+  .master-delta { font-weight: 600; color: var(--text-muted); }
+  .slider-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+  
+  .trio-toggle { padding: 10px; background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 8px; font-size: 13px; display: flex; align-items: center; gap: 8px; cursor: pointer; }
+  .trio-toggle.on { border-color: var(--accent); color: var(--accent); }
 
-  .llm-head input[type="checkbox"] { accent-color:var(--accent);
-    margin:0; width:20px; height:20px; cursor:pointer; flex-shrink:0; }
-  .llm-emoji { font-size:17px; flex-shrink:0; }
-  .llm-name { flex:1; min-width:0; font-weight:600; font-size:15px;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-
-  /* Compact header variants of the shared lock/remove buttons. */
-  .llm-head .lock-btn { padding:1px 2px; font-size:14px; }
-  .llm-head .remove-btn { padding:1px 2px; font-size:12px; }
-  .llm-head .model-badge { font-size:9px; padding:0 3px; }
-
-  .slider-row { grid-area:slider; }
-
-  /* Prefix edit button now lives in the header row, next to the lock. */
-  .prefix-edit-btn { background:transparent; border:1px solid transparent;
-    border-radius:4px; color:var(--text); cursor:pointer; padding:1px 3px;
-    font-size:13px; line-height:1.2; font-family:inherit; flex-shrink:0; opacity:.65; }
-  .llm-head .prefix-edit-btn { padding:1px 2px; font-size:12px; }
-  .prefix-edit-btn:hover { opacity:1; border-color:var(--accent);
-    background:rgba(255,255,255,.06); }
-  .prefix-preview { grid-area:preview; font-size:12px; color:var(--muted);
-    font-style:italic; white-space:nowrap; overflow:hidden;
-    text-overflow:ellipsis; padding-left:2px; }
-
-  /* Reorder arrows: small vertical stack on the row's right edge. */
-  .row-rail { grid-area:rail; display:flex; flex-direction:column;
-    justify-content:center; align-items:center; gap:2px; }
-  .reorder-btn { background:transparent; border:1px solid transparent;
-    border-radius:3px; color:var(--muted); cursor:pointer; padding:0;
-    width:16px; height:16px; font-size:10px; line-height:1;
-    display:flex; align-items:center; justify-content:center; opacity:.9; }
-  .reorder-btn:hover:not(:disabled) { opacity:1; color:var(--text);
-    border-color:var(--border); background:rgba(255,255,255,.08); }
-  .reorder-btn:disabled { opacity:.18; cursor:default; }
-
-  /* ---- Center ---- */
-  .center { grid-area: center; overflow-y:auto; padding:20px 28px; }
-  .wrap { max-width:950px; margin:0 auto; }
-  .turn { margin-bottom:24px; border-left:2px solid transparent; padding-left:14px; }
-  .turn.in-ctx { border-left-color:var(--accent); }
-
-  .turn-head { display:flex; align-items:center; justify-content:center;
-    gap:10px; margin-bottom:12px; font-size:15px; color:var(--muted);
-    letter-spacing:.06em; text-transform:uppercase; cursor:pointer;
-    user-select:none; padding:6px 0; border-top:1px solid var(--border);
-    border-bottom:1px solid var(--border); }
-  .turn-head:hover { color:var(--text); }
-  .turn-head .tnum { color:var(--accent); font-weight:600; }
-  .turn-head .log-btn { background:transparent; border:none; color:var(--muted);
-    cursor:pointer; padding:2px 6px; border-radius:4px; font-size:16px; }
-
-  .prompt-card { padding:12px 14px; border-radius:var(--radius);
-    background:#141821; border:1px solid var(--border); font-size:18px;
-    margin-bottom:12px; white-space:pre-wrap; word-wrap:break-word; }
-  .prompt-card .who { font-size:13px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
-
-  .hybrid-card { border-radius:var(--radius); background:#161e2e;
-    border:1px solid #2a3d5c; overflow:hidden; margin-bottom:8px; }
-  .hybrid-label { font-size:13px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--accent); padding:8px 14px 0 14px; }
-  .hybrid-body { padding:6px 14px 12px 14px; font-size:18px;
-    white-space:pre-wrap; word-wrap:break-word; }
-
-  .score-bar { padding:10px 14px; font-size:16px; cursor:pointer;
-    background:rgba(63,185,80,.09); color:var(--green);
-    border-top:1px solid var(--border);
-    display:flex; gap:8px; align-items:flex-start; }
-  .score-bar.mid { background:rgba(240,180,41,.09); color:var(--amber); }
-  .score-bar.low { background:rgba(248,81,73,.09); color:var(--red); }
-  .score-bar .pct { font-weight:700; white-space:nowrap;
-    font-variant-numeric:tabular-nums; min-width:60px; }
-  .score-bar .reason { flex:1; color:var(--muted); font-weight:400;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .score-bar.open .reason { white-space:normal; }
-
-  .source-bar { display:flex; align-items:center; gap:8px; padding:8px 12px;
-    border-top:1px solid var(--border); background:rgba(0,0,0,.15);
-    cursor:pointer; user-select:none; flex-wrap:wrap; }
-  .source-bar:hover { background:rgba(255,255,255,.03); }
-  .src-emoji { background:var(--panel); border:1px solid var(--border);
-    color:var(--text); cursor:pointer; padding:5px 10px; font-size:17px;
-    border-radius:6px; font-family:inherit; }
-  .src-emoji:hover { border-color:var(--accent); }
-  .src-emoji.on { border-color:var(--accent); background:#1a2130;
-    box-shadow:0 0 0 1px var(--accent) inset; }
-  .src-emoji.omitted { opacity:.45; }
-  .source-bar .spacer { flex:1; }
-  .source-bar .bar-act { background:transparent; border:1px solid var(--border);
-    color:var(--muted); cursor:pointer; padding:5px 10px; font-size:15px;
-    border-radius:5px; font-family:inherit; }
-  .source-bar .bar-act:hover { color:var(--text); border-color:var(--accent); }
-
-  .src-reply { display:none; border-top:1px solid var(--border);
-    background:var(--panel); padding:12px 14px; font-size:18px;
-    white-space:pre-wrap; word-wrap:break-word; }
-  .src-reply.open { display:block; }
-  .src-reply .src-head { font-size:13px; letter-spacing:.06em;
-    text-transform:uppercase; color:var(--muted); margin-bottom:6px;
-    display:flex; gap:8px; align-items:center; }
-  .src-reply .src-head .time { color:var(--muted); font-size:14px;
-    text-transform:none; letter-spacing:0; }
-  .src-reply .src-head .pct { margin-left:auto; color:var(--green);
-    font-weight:600; font-variant-numeric:tabular-nums; }
-  .src-reply .src-head .pct.mid { color:var(--amber); }
-  .src-reply .src-head .pct.low { color:var(--red); }
-  .src-reply .src-reason { font-size:14px; color:var(--muted);
-    margin-top:8px; padding-top:8px; border-top:1px dashed var(--border); }
-
-  /* ---- Bottom ---- */
-  .bottom { grid-area: bottom; border-top:1px solid var(--border);
-    background:var(--panel); padding:12px 16px;
-    display:flex; flex-direction:column; gap:8px; }
-  .bottom-inner { max-width:950px; margin:0 auto; width:100%;
-    display:flex; flex-direction:column; gap:8px; }
-
-  .history { background:var(--panel-2); border:1px solid var(--border);
-    border-radius:var(--radius); padding:10px 12px;
-    display:flex; flex-direction:column; gap:8px; }
-  .hs-head { display:flex; align-items:center; gap:8px;
-    font-size:14px; color:var(--muted); letter-spacing:.08em;
-    text-transform:uppercase; }
-  .hs-head .spacer { flex:1; }
-  .hs-head .meta { font-variant-numeric:tabular-nums; color:var(--accent);
-    letter-spacing:0; text-transform:none; font-size:15px; }
-  .hs-row { display:flex; align-items:center; gap:10px; }
-  .hs-preview { flex:1; min-width:0; font-size:16px; color:var(--muted);
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .hs-preview strong { color:var(--text); font-weight:600; }
-  .hs-track { flex:0 0 260px; }
-  .hs-track input[type="range"] { width:100%; accent-color:var(--amber);
-    height:6px; cursor:pointer; }
-  .hs-stats { display:flex; gap:16px; font-size:15px; color:var(--muted);
-    font-variant-numeric:tabular-nums; }
-  .hs-stats strong { color:var(--text); font-weight:600; }
-
-  #masterText { width:100%; min-height:60px; max-height:160px; resize:vertical;
-    background:var(--bg); color:var(--text); border:1px solid var(--border);
-    border-radius:var(--radius); padding:10px 12px; font:inherit;
-    font-size:18px; outline:none; }
-  #masterText:focus { border-color:var(--accent); }
-
-  .toolbar { display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
-  button { font:inherit; cursor:pointer; border-radius:6px;
-    border:1px solid var(--border); background:var(--panel-2); color:var(--text);
-    padding:8px 12px; font-size:18px; line-height:1; display:flex; align-items:center; gap:6px; }
-  button:hover { border-color:var(--accent); }
-  button.primary { background:var(--accent-2); border-color:var(--accent-2); color:#fff; }
-  button.toggle { opacity:.45; }
-  button.toggle.on { opacity:1; border-color:var(--accent);
-    box-shadow:0 0 0 1px var(--accent) inset; }
-  button.free.on { border-color:var(--green); color:var(--green);
-    box-shadow:0 0 0 1px var(--green) inset; }
-  .btn-label { font-size:14px; font-weight:500; }
-
-  .engine-picker { display:flex; align-items:center; gap:6px;
-    background:var(--panel-2); border:1px solid var(--border);
-    border-radius:6px; padding:5px 8px; }
-  .engine-picker:focus-within { border-color:var(--accent); }
-  .engine-picker .engine-label { color:var(--muted); font-size:13px;
-    text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
-  .engine-picker select { background:var(--bg); color:var(--text);
-    border:1px solid var(--border); border-radius:4px; padding:4px 6px;
-    font:inherit; font-size:14px; cursor:pointer; outline:none; }
-  .engine-picker select:focus { border-color:var(--accent); }
-
-  .add-custom-btn { width:100%; justify-content:center;
-    border-style:dashed; color:var(--accent); background:transparent;
-    font-size:15px; padding:9px 10px; }
+  .add-custom-btn { width:100%; justify-content:center; border-style:dashed; color:var(--accent); background:transparent; padding:9px 10px; cursor:pointer; border-radius:6px; }
   .add-custom-btn:hover { background:rgba(110,168,254,.08); }
-  .model-badge { font-size:10px; font-weight:700; letter-spacing:.06em;
-    color:var(--purple); border:1px solid var(--purple); border-radius:4px;
-    padding:1px 4px; line-height:1.2; text-transform:uppercase; }
 
-  /* ---- Shared modal (window.prompt replacement) ---- */
-  .app-modal { position:fixed; inset:0; z-index:1000; display:flex;
-    align-items:center; justify-content:center; padding:20px;
-    background:rgba(0,0,0,.65); }
-  .app-modal[hidden] { display:none; }
-  .app-modal-panel { width:min(520px, 100%); background:var(--panel-2);
-    border:1px solid var(--accent); border-radius:12px; padding:22px;
-    box-shadow:0 18px 60px rgba(0,0,0,.75); }
-  .app-modal-panel h2 { margin:0 0 8px; color:var(--accent); font-size:22px; }
-  .app-modal-message { color:var(--muted); font-size:15px; line-height:1.5;
-    margin-bottom:16px; }
-  .app-modal-tabs { display:flex; gap:6px; margin-bottom:14px;
-    border-bottom:1px solid var(--border); }
-  .app-modal-tabs[hidden] { display:none; }
-  .app-modal-tab { background:transparent; border:1px solid transparent;
-    border-bottom:none; border-radius:6px 6px 0 0; color:var(--muted);
-    padding:7px 12px; font-size:14px; line-height:1.2; margin-bottom:-1px; }
-  .app-modal-tab:hover { color:var(--text); border-color:var(--border); }
-  .app-modal-tab.active { color:var(--accent); background:var(--bg);
-    border-color:var(--border); border-bottom-color:var(--bg); }
-  .app-modal-fields { display:flex; flex-direction:column; gap:12px; }
-  .app-modal-field { display:flex; flex-direction:column; gap:5px; }
-  .app-modal-field label { color:var(--muted); font-size:13px;
-    letter-spacing:.05em; text-transform:uppercase; }
-  .app-modal-field input { width:100%; background:var(--bg); color:var(--text);
-    border:1px solid var(--border); border-radius:6px; padding:9px 10px;
-    font:inherit; font-size:16px; outline:none; }
-  .app-modal-field input:focus { border-color:var(--accent); }
-  .app-modal-error { color:var(--red); font-size:14px; margin-top:12px; }
-  .app-modal-error[hidden] { display:none; }
-  .app-modal-actions { display:flex; justify-content:flex-end; gap:8px;
-    margin-top:18px; }
-  .app-modal-actions .modal-btn { padding:8px 16px; font-size:15px; }
+  /* --- CENTER (Chat) --- */
+  .center { display: flex; flex-direction: column; border: 1px dashed var(--border); border-radius: 16px; overflow: hidden; }
+  .topbar { display: flex; justify-content: flex-end; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  
+  .tabs { display: flex; gap: 4px; margin-right: auto; }
+  .tab { padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: rgba(255,255,255,0.03); color: var(--text-muted); cursor: pointer; }
+  .tab.active { border-color: var(--accent); color: var(--accent); }
+  
+  .topbar button { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text); padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: 0.2s; }
+  .topbar button:hover { background: rgba(255,255,255,0.1); border-color: var(--accent); }
 
-  .statusbar { display:flex; gap:12px; padding:8px 10px; font-size:15px;
-    background:#0b0d11; border:1px solid var(--border); border-radius:6px;
-    font-variant-numeric:tabular-nums; min-height:32px; align-items:center; }
-  .sb-prompt { color:var(--accent); font-weight:600; white-space:nowrap; }
-  .sb-timer { color:var(--amber); white-space:nowrap; font-weight:600; }
-  .sb-timer.done { color:var(--green); }
-  .sb-status { color:var(--muted); white-space:nowrap; }
-  .sb-progress { flex:1; height:4px; background:var(--border); border-radius:2px;
-    overflow:hidden; min-width:60px; position:relative; }
-  .sb-progress .fill { position:absolute; inset:0 auto 0 0;
-    background:linear-gradient(90deg, var(--amber), var(--accent));
-    transition:width .5s linear; }
+  .conv-wrap { flex: 1; overflow-y: auto; padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .turn { border-left: 2px solid transparent; padding-left: 12px; }
+  .turn.in-ctx { border-left-color: var(--accent); }
+  .turn-head { font-size: 12px; color: var(--text-muted); display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .prompt-card { background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; font-size: 14px; margin-bottom: 8px; }
+  .hybrid-card { background: rgba(0,0,0,0.3); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 12px;}
+  .hybrid-label { font-size: 11px; color: var(--accent); text-transform: uppercase; margin-bottom: 8px; font-weight: bold; }
+  .hybrid-body { font-size: 14px; line-height: 1.6; white-space: pre-wrap; }
+  
+  .score-bar { padding: 8px 12px; font-size: 12px; cursor: pointer; background: rgba(255,255,255,0.05); border-top: 1px solid var(--border); display: flex; gap: 8px; margin-top: 12px; border-radius: 6px; }
+  .source-bar { display: flex; align-items: center; gap: 8px; margin-top: 12px; }
+  .src-emoji { background: rgba(0,0,0,0.5); border: 1px solid var(--border); padding: 4px 8px; border-radius: 6px; cursor: pointer; color: white; }
+  .src-emoji.omitted { opacity: 0.4; }
+  .src-reply { display: none; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 8px; margin-top: 8px; font-size: 13px; }
+  .src-reply.open { display: block; }
 
-  ::-webkit-scrollbar { width:10px; height:10px; }
-  ::-webkit-scrollbar-thumb { background:#2a2f3a; border-radius:10px; }
+  /* --- RIGHT RAIL (Prompt) --- */
+  .right-rail { width: 340px; }
+  .prompt-area { padding: 16px; display: flex; flex-direction: column; flex: 1; gap: 12px; }
+    textarea { width: 100%; flex: 1; min-height: 120px; background: transparent; border: none; color: var(--text); font-family: var(--font-main); font-size: 16px; resize: none; outline: none; line-height: 1.6; margin-bottom: 0; }
+  textarea::placeholder { color: var(--text-muted); opacity: 0.5; }
+  
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; }
+    .toolbar button { background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--text); padding: 12px 10px; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; flex: 1; display: flex; justify-content: center; align-items: center; gap: 6px; transition: 0.2s; }
+  .toolbar button:hover { background: rgba(255,255,255,0.1); }
+  .toolbar button.primary { background: rgba(0, 240, 255, 0.1); border-color: var(--accent); color: var(--accent); box-shadow: 0 0 15px var(--accent-glow); flex: 2; }
+
+  .history { padding: 16px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-muted); display: flex; flex-direction: column; gap: 8px; }
+  .hs-row input[type="range"] { width: 100%; accent-color: var(--accent); }
+  .statusbar { display: flex; justify-content: space-between; font-size: 11px; padding-top: 8px; border-top: 1px dashed var(--border); }
+
+  /* Mini Bottom Bar (For Mobile) */
+  .bottom-mini { display: none; }
+  
+  /* --- MOBILE / PORTRAIT MODE --- */
+      @media (max-width: 1100px), (orientation: portrait) {
+    .app { 
+      display: flex !important; 
+      flex-direction: column !important; 
+      padding: 8px !important; 
+      gap: 8px !important; 
+      width: 100% !important; 
+      height: 100vh !important;
+    }
+    
+    /* Force the left sidebar to stretch full width */
+    .leftbar { 
+      width: 100% !important; 
+      height: 280px !important; 
+      flex-shrink: 0; 
+      border-radius: 12px; 
+    }
+    
+    /* Force the right prompt box to stretch full width */
+    .right-rail { 
+      width: 100% !important; 
+      height: 320px !important; 
+      flex-shrink: 0; 
+      border-radius: 12px; 
+    }
+    
+    /* Make the chat fill the remaining space */
+    .center { 
+      border: none !important; 
+      flex: 1 !important; 
+      width: 100% !important; 
+      min-height: 0; 
+    }
+    
+    .prompt-area { height: 100%; padding: 12px; }
+    textarea { flex: 1; min-height: 80px; width: 100%; }
+    
+    /* Fit models nicely into a responsive grid */
+    .llm-list-container { 
+      display: grid !important; 
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)) !important; 
+      gap: 8px !important; 
+      width: 100% !important; 
+    }
+  }
+
+  /* MODALS */
+  .app-modal { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.8); backdrop-filter: blur(5px); padding: 20px; }
+  .app-modal[hidden] { display: none; }
+  .app-modal-panel { width: min(520px, 100%); background: var(--panel-glass); border: 1px solid var(--accent-2); border-radius: 16px; padding: 32px; }
+  .app-modal-panel h2 { margin-bottom: 12px; color: var(--accent-2); }
+  .app-modal-message { color: var(--text-muted); margin-bottom: 24px; }
+  .app-modal-field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 12px; }
+  .app-modal-field label { font-size: 12px; text-transform: uppercase; color: var(--text-muted); }
+  .app-modal-field input { background: rgba(0,0,0,0.5); border: 1px solid var(--border); padding: 10px; border-radius: 6px; color: white; font-size: 14px; }
+  .app-modal-actions { display: flex; gap: 12px; margin-top: 24px; }
+  .app-modal-actions button { flex: 1; padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; border: none; }
+  .app-modal-actions button.primary { background: var(--accent); color: #000; }
+  .app-modal-actions button.secondary { background: transparent; border: 1px solid var(--border); color: var(--text); }
 </style>
 </head>
 <body>
 
 <div class="app">
-  <div class="topbar">
-    <button class="sidebar-toggle" id="sidebarToggle" type="button"
-      aria-label="Hide sidebar" aria-expanded="true" title="Hide sidebar">☰</button>
-    <div class="tabs" id="tabs"></div>
-    <button id="loginBtn" onclick="window.api?.startLoginMode?.()" style="padding: 8px 12px; background: #2196F3; color: white; border: none; border-radius: 6px; margin-right: 8px; font-weight: bold; font-size: 15px; cursor: pointer;">🔐 Login Mode</button>
-    <button id="newChatBtn" onclick="clearChat()" style="padding: 8px 12px; background: #f44336; color: white; border: none; border-radius: 6px; margin-right: 12px; font-weight: bold; font-size: 15px; cursor: pointer;">🗑️ New Chat</button>
-    <button class="legend-pill" id="legendPill">📖 Legend ▾</button>
-    <button class="branch-pill">🌿 Branch ▾</button>
-    
-    <div class="legend-drop" id="legendDrop">
-      <div class="ld-head"><span>📖 Legend</span><span class="spacer"></span>
-        <span id="ctxPill" style="color:var(--muted);text-transform:none;letter-spacing:0;font-size:15px">idle</span>
-      </div>
-      <div class="ctx-switch" id="ctxSwitch">
-        <button data-ctx="idle" class="active">UI Overview</button>
-        <button data-ctx="reply">Reply Tools</button>
-        <button data-ctx="summary">Free Bench</button>
-      </div>
-      <div class="legend-list" id="legendBody"></div>
-    </div>
-  </div>
-
-  <div class="leftbar">
+  <!-- LEFT RAIL: Models -->
+  <div class="rail leftbar">
     <div class="lb-full">
-      <div class="lb-section">Detail & Heat</div>
+      <div class="rail-header" style="padding: 0 0 10px 0; border: none;">
+        <span>Active Models</span>
+        <span style="cursor:pointer; color:var(--accent);" onclick="addCustomProvider()">+ Add</span>
+      </div>
+      
       <div class="master-slider">
         <div class="head">
-          <span class="label">Master Slider</span>
+          <span class="label">Master Detail</span>
           <span class="master-delta" id="masterDelta">±0</span>
-          <span class="spacer"></span>
-          <button class="lock-btn" id="masterLock" title="Master Lock OFF: individual locks respected"
-            aria-label="Master lock" aria-pressed="false">🔓</button>
+          <span class="spacer" style="flex:1;"></span>
+          <button class="lock-btn" id="masterLock" title="Master Lock" aria-pressed="false" style="background:none; border:none; color:var(--accent); cursor:pointer;">🔓</button>
         </div>
         <div class="slider-row">
-          <input type="range" id="masterSlider" min="-100" max="100" step="1" value="0"
-            aria-label="Master relative adjustment">
+          <input type="range" id="masterSlider" min="-100" max="100" step="1" value="0">
         </div>
       </div>
+
       <div class="trio-toggle" id="trioToggle">
-        <div class="sw"></div>
+        <div class="sw"></div> <!-- Placeholder for toggle switch CSS if needed -->
         <span>Max Heat for DeepSeek, Perplexity, Meta</span>
       </div>
-      <div class="lb-section">Models</div>
+
       <div id="llmList" class="llm-list-container"></div>
     </div>
     <div class="mini-rail" id="miniRail">
-      <button class="mini-toggle" id="miniToggle" type="button"
-        aria-label="Expand sidebar" aria-expanded="false" title="Expand sidebar">☰</button>
-      <div class="mini-emojis" id="miniEmojis" aria-label="Active models"></div>
+      <button class="mini-toggle" id="miniToggle" aria-label="Expand sidebar">☰</button>
+      <div class="mini-emojis" id="miniEmojis"></div>
     </div>
   </div>
 
+  <!-- CENTER: Chat -->
   <div class="center">
-    <div class="wrap" id="convWrap"></div>
+    <div class="topbar">
+      <div class="tabs" id="tabs"></div>
+      <button id="loginBtn" onclick="window.api?.startLoginMode?.()">🔐 Login Mode</button>
+      <button id="newChatBtn" onclick="clearChat()">🗑️ New Chat</button>
+      <button id="settingsBtn">⚙ Settings</button>
+      <button class="legend-pill" id="legendPill">📖 Legend ▾</button>
+      <button class="branch-pill">🌿 Branch ▾</button>
+      <span class="top-status" id="sbStatus" style="font-size: 12px; color: var(--text-muted);">idle</span>
+    </div>
+
+    <!-- Legend Dropdown -->
+    <div class="legend-drop" id="legendDrop" style="position:absolute; top:60px; right: 350px; background:var(--panel-glass); border:1px solid var(--accent); border-radius:10px; padding:14px; width:380px; z-index:50; display:none;">
+      <div class="ld-head"><span>📖 Legend</span><span class="spacer" style="flex:1;"></span>
+        <span id="ctxPill" style="color:var(--text-muted);font-size:15px">idle</span>
+      </div>
+      <div class="ctx-switch" id="ctxSwitch" style="display:flex; gap:6px; margin-bottom:10px;">
+        <button data-ctx="idle" class="active" style="flex:1; padding:6px; font-size:12px; background:var(--bg-dark); border:1px solid var(--border); border-radius:4px; cursor:pointer;">UI Overview</button>
+        <button data-ctx="reply" style="flex:1; padding:6px; font-size:12px; background:var(--bg-dark); border:1px solid var(--border); border-radius:4px; cursor:pointer;">Reply Tools</button>
+      </div>
+      <div class="legend-list" id="legendBody"></div>
+    </div>
+
+    <div class="conv-wrap" id="convWrap">
+      <h1 style="color:var(--text-muted); text-align:center; margin-top:20%; font-weight:300; opacity: 0.5;">LLM Explorer</h1>
+    </div>
   </div>
 
-  <div class="bottom">
-    <div class="bottom-inner">
+  <!-- RIGHT RAIL: Prompt -->
+  <div class="rail right-rail bottom" id="bottomBar">
+    <div class="rail-header">
+      <span>Prompt</span>
+    </div>
+    
+    <!-- Full Prompt Area -->
+    <div class="prompt-area bottom-inner" id="bottomInner">
+      <textarea id="masterText" placeholder="Type your prompt here..."></textarea>
+      
+      <div class="toolbar">
+        <button id="retryBtn">🔄 Retry</button>
+        <button id="syncBtn">Sync</button>
+        <button class="toggle on" id="prefixToggleBtn">✨ Prefix</button>
+        <button id="hybridBtn">🪟 Hybrid</button>
+        <button class="toggle free" id="freeBtn">🆓 Free APIs</button>
+        <button class="primary send-btn" id="sendBtn">
+          <span>Send ✈️</span>
+          <span class="send-eta" id="sbTimer" style="font-size: 10px;">~0.0s</span>
+        </button>
+      </div>
+      
       <div class="history">
-        <div class="hs-head">
-          <span>📜 History Context</span><span class="spacer"></span>
-          <span class="meta" id="hsMeta">0 of 0 turns included</span>
+        <div class="hs-head" style="display:flex; justify-content:space-between; margin-bottom: 8px;">
+          <span>History Context</span>
+          <span id="hsMeta">0 of 0</span>
         </div>
         <div class="hs-row">
-          <div class="hs-preview" id="hsPreview"></div>
-          <div class="hs-track">
-            <input type="range" id="hsRange" min="0" max="2" value="0">
-          </div>
+          <input type="range" id="hsRange" min="0" max="0" value="0">
         </div>
-        <div class="hs-stats">
-          <span>Depth: <strong id="hsDepth">0 turns</strong></span>
-          <span>Est. Context: <strong id="hsTok">0 tok</strong></span>
-          <span>Est. Time: <strong id="hsNext">~0.0s</strong></span>
+        <div class="statusbar">
+          <span>Depth: <strong id="hsDepth">0</strong></span>
+          <span>Est: <strong id="hsTok">0</strong> tok</span>
+          <span>Time: <strong id="hsNext">~0s</strong></span>
         </div>
       </div>
+    </div>
 
-      <textarea id="masterText" placeholder="Type a prompt here and hit Send..."></textarea>
-
-      <div class="toolbar">
-        <button class="primary" id="sendBtn">⚡ <span class="btn-label">Send</span></button>
-        <label class="engine-picker" title="Synthesis engine">
-          <span class="engine-label">Engine</span>
-          <select id="engineToggle" aria-label="Synthesis engine">
-            <option value="Local GPU" selected>Local GPU</option>
-            <option value="Cloud">Cloud API (DeepSeek)</option>
-          </select>
-        </label>
-        <button id="retryBtn">🔄 <span class="btn-label">Retry</span></button>
-        <button id="syncBtn">Sync <span class="btn-label">View</span></button>
-        <button class="toggle on" id="prefixToggleBtn">✨ <span class="btn-label">Prefix</span></button>
-        <button id="hybridBtn">🪟 <span class="btn-label">Hybrid</span></button>
-        <button class="toggle free" id="freeBtn">🆓 <span class="btn-label">Free APIs</span></button>
-        <button id="settingsBtn">⚙ <span class="btn-label">Settings</span></button>
-      </div>
-
-      <div class="statusbar">
-        <span class="sb-prompt" id="sbPrompt">✎ Master</span>
-        <span class="sb-timer" id="sbTimer">est. next send: ~4.8s</span>
-        <span class="sb-status" id="sbStatus">idle</span>
-        <div class="sb-progress" id="sbProgress" style="display:none">
-          <div class="fill" id="sbFill" style="width:0%"></div>
-        </div>
-      </div>
+    <!-- Mini Prompt Area (Mobile / Collapse) -->
+    <div class="bottom-mini" id="bottomMini">
+      <input class="mini-input" id="miniText" type="text" placeholder="Prompt...">
+      <select class="mini-engine" id="miniEngineToggle">
+        <option value="Local GPU" selected>Local</option>
+        <option value="Cloud">DeepSeek</option>
+      </select>
+      <button class="primary mini-send" id="miniSendBtn">✈️</button>
     </div>
   </div>
 </div>
-<!-- Shared modal: Electron has no working window.prompt(). -->
+
+<!-- Shared Modal -->
 <div class="app-modal" id="appModal" hidden>
   <div class="app-modal-panel" role="dialog" aria-modal="true" aria-labelledby="appModalTitle">
     <h2 id="appModalTitle"></h2>
@@ -545,13 +339,11 @@
     <div class="app-modal-fields" id="appModalFields"></div>
     <div class="app-modal-error" id="appModalError" hidden></div>
     <div class="app-modal-actions">
-      <button type="button" class="modal-btn secondary" id="appModalCancel">Cancel</button>
-      <button type="button" class="modal-btn primary" id="appModalSave">Save</button>
+      <button type="button" class="secondary" id="appModalCancel">Cancel</button>
+      <button type="button" class="primary" id="appModalSave">Save</button>
     </div>
   </div>
 </div>
-
-
 
 <script>
   // --- PREFIX PRESETS ---
@@ -561,9 +353,6 @@
     'ELI5': "Explain like I'm 5 years old. Use simple language and relatable analogies."
   };
 
-  // --- MODEL CHANNELS (from the main-process provider registry) ---
-  // The list comes from window.api.getProviders() at startup, merged with the
-  // user's UI preferences. API keys never enter this state.
   let CH = [];
   const UI_PREFS_KEY = 'llmx.uiPrefs.v1';
 
@@ -598,7 +387,7 @@
         channels
       }));
     } catch {
-      // Preference persistence is best-effort; never block the UI on storage.
+      // Ignore
     }
   }
 
@@ -609,7 +398,7 @@
     try {
       localStorage.setItem(UI_PREFS_KEY, JSON.stringify(prefs));
     } catch {
-      // Ignore storage failures.
+      // Ignore
     }
   }
 
@@ -620,7 +409,6 @@
       : {};
     const byId = new Map(providers.map(provider => [provider.id, provider]));
 
-    // Saved drag order first, then providers added since the last launch.
     const order = [];
     (Array.isArray(prefsData.order) ? prefsData.order : []).forEach(id => {
       if (byId.has(id) && !order.includes(id)) order.push(id);
@@ -681,14 +469,12 @@
 
   const HYB = '🪟';
 
-  // Helper: Escape user-entered strings used in innerHTML
   function esc(value) {
     return String(value ?? '').replace(/[&<>"']/g, c => ({
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
     }[c]));
   }
 
-  // Helper: Effective Prefix text
   function getPrefixText(ch) {
     if (ch.prefixType === 'Custom') {
       return ch.customPrefix || 'Custom prefix';
@@ -696,12 +482,8 @@
     return PREFIX_PRESETS[ch.prefixType] || PREFIX_PRESETS['Concise'];
   }
 
-  // --- SHARED INPUT MODAL ---
-  // Electron's renderer does not implement window.prompt(), so every text
-  // prompt goes through this one in-page form.
-  // With `tabs`, each tab has its own fields and validation, and the promise
-  // resolves to { tab, values } so the caller knows which form was submitted.
   function showAppModal({ title, message = '', fields = [], tabs = null, confirmLabel = 'Save', validate }) {
+    // (Implementation remains exactly the same as your provided JS)
     const overlay = document.getElementById('appModal');
     const titleEl = document.getElementById('appModalTitle');
     const messageEl = document.getElementById('appModalMessage');
@@ -783,12 +565,8 @@
 
       const focusFirstInput = () => {
         const firstInput = fieldsEl.querySelector('input');
-        if (firstInput) {
-          firstInput.focus();
-          firstInput.select();
-        } else {
-          saveBtn.focus();
-        }
+        if (firstInput) { firstInput.focus(); firstInput.select(); }
+        else { saveBtn.focus(); }
       };
 
       const switchTab = tabId => {
@@ -823,7 +601,6 @@
 
       const submit = () => {
         const values = readInputs();
-
         for (const field of currentFields()) {
           const input = inputs[field.name];
           if (field.required && input && !input.value.trim()) {
@@ -834,36 +611,23 @@
         }
 
         const validationError = validate ? validate(values, activeTab) : '';
-        if (validationError) {
-          showError(validationError);
-          return;
-        }
+        if (validationError) { showError(validationError); return; }
 
         const tabDef = currentTab();
         if (tabDef && typeof tabDef.validate === 'function') {
           const tabError = tabDef.validate(values);
-          if (tabError) {
-            showError(tabError);
-            return;
-          }
+          if (tabError) { showError(tabError); return; }
         }
 
         close(tabList ? { tab: activeTab, values } : values);
       };
 
       const onKeyDown = event => {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          close(null);
-        } else if (event.key === 'Enter' && event.target.tagName === 'INPUT') {
-          event.preventDefault();
-          submit();
-        }
+        if (event.key === 'Escape') { event.preventDefault(); close(null); }
+        else if (event.key === 'Enter' && event.target.tagName === 'INPUT') { event.preventDefault(); submit(); }
       };
 
-      overlay.onclick = event => {
-        if (event.target === overlay) close(null);
-      };
+      overlay.onclick = event => { if (event.target === overlay) close(null); };
       cancelBtn.onclick = () => close(null);
       saveBtn.onclick = submit;
       document.addEventListener('keydown', onKeyDown);
@@ -875,7 +639,6 @@
     });
   }
 
-  // --- ADD PROVIDER (website scraper or API model) ---
   async function addCustomProvider() {
     const result = await showAppModal({
       title: 'Add Provider',
@@ -895,9 +658,7 @@
             try {
               const url = new URL(form.endpoint.trim());
               if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
-            } catch {
-              return 'Enter a valid http(s) endpoint URL.';
-            }
+            } catch { return 'Enter a valid http(s) endpoint URL.'; }
             return '';
           }
         },
@@ -914,9 +675,7 @@
             try {
               const url = new URL(form.url.trim());
               if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('protocol');
-            } catch {
-              return 'Enter a valid http(s) site URL.';
-            }
+            } catch { return 'Enter a valid http(s) site URL.'; }
             return '';
           }
         }
@@ -932,27 +691,17 @@
       return;
     }
 
-    // The provider config is persisted by main in userData/providers.json.
     let created;
     try {
       created = tab === 'scrape'
         ? await window.api.addProvider({
-            name,
-            kind: 'scrape',
-            emoji: '🌐',
-            url: values.url.trim(),
-            inputSelector: values.inputSelector.trim(),
-            responseSelector: values.responseSelector.trim(),
-            submitAction: 'enter',
-            checked: true
+            name, kind: 'scrape', emoji: '🌐', url: values.url.trim(),
+            inputSelector: values.inputSelector.trim(), responseSelector: values.responseSelector.trim(),
+            submitAction: 'enter', checked: true
           })
         : await window.api.addProvider({
-            name,
-            kind: 'api',
-            emoji: '🧩',
-            endpoint: values.endpoint.trim(),
-            modelId: values.modelId.trim(),
-            checked: true
+            name, kind: 'api', emoji: '🧩', endpoint: values.endpoint.trim(),
+            modelId: values.modelId.trim(), checked: true
           });
     } catch (error) {
       alert(`Could not add the provider: ${error.message}`);
@@ -964,13 +713,10 @@
       return;
     }
 
-    // The key goes straight to the encrypted store; CH never sees it.
     if (tab === 'api' && values.apiKey.trim()) {
       try {
         const saved = await window.api.setKey(created.provider.keyRef, values.apiKey.trim());
-        if (!saved?.ok) {
-          alert(`Provider added, but the API key was not saved: ${saved?.error || 'unknown error'}`);
-        }
+        if (!saved?.ok) alert(`Provider added, but the API key was not saved: ${saved?.error || 'unknown error'}`);
       } catch (error) {
         alert(`Provider added, but the API key was not saved: ${error.message}`);
       }
@@ -980,7 +726,6 @@
     saveUiPrefs();
   }
 
-  // Helper: Blend cool deep blue -> warm orange -> hot red.
   function heatColor(value) {
     const v = Math.max(1, Math.min(100, Number(value) || 1));
     const lerp = (a, b, t) => Math.round(a + (b - a) * t);
@@ -998,17 +743,12 @@
     const t = (v - 1) / 99;
     row.classList.add('heat-row');
     row.style.setProperty('--heat-rgb', `${r}, ${g}, ${b}`);
-    // The whole row body fills with the heat color: deep blue at 1, hot red
-    // at 100. Two stops keep a subtle diagonal gradient across the card.
     row.style.setProperty('--heat-a', (0.16 + 0.58 * t).toFixed(3));
     row.style.setProperty('--heat-a-2', (0.08 + 0.44 * t).toFixed(3));
     row.style.setProperty('--heat-border-a', (0.35 + 0.65 * t).toFixed(3));
     row.style.setProperty('--heat-glow', (Math.max(0, (t - 0.7) / 0.3) * 18).toFixed(1));
   }
 
-  // --- MAX HEAT PULSE (Anime.js) ---
-  // `.maxed` is the CSS equivalent of selecting `.llm-row.maxed`. Each row keeps
-  // its own animation so keyed re-renders and reordering never restart or leak it.
   const reduceMotionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
 
   function stopMaxPulse(row) {
@@ -1020,22 +760,14 @@
 
   function syncMaxHeat(row, atMax) {
     row.classList.toggle('maxed', !!atMax);
-    if (!atMax) {
-      stopMaxPulse(row);
-      return;
-    }
+    if (!atMax) { stopMaxPulse(row); return; }
     if (row._maxPulse || reduceMotionQuery.matches) return;
     if (!window.anime?.animate) return;
     row._maxPulse = anime.animate(row, {
-      borderColor: ['#f85149', '#f0b429'],
-      duration: 650,
-      loop: true,
-      alternate: true,
-      ease: 'inOutSine'
+      borderColor: ['#f85149', '#f0b429'], duration: 650, loop: true, alternate: true, ease: 'inOutSine'
     });
   }
 
-  // --- STATE FOR LOCKS & MASTER SLIDER ---
   const masterSlider = document.getElementById('masterSlider');
   const masterDelta = document.getElementById('masterDelta');
   const masterLock = document.getElementById('masterLock');
@@ -1045,15 +777,12 @@
 
   const clamp = (n, lo, hi) => Math.min(hi, Math.max(lo, n));
 
-  function getMasterOffset() {
-    return parseInt(masterSlider.value, 10) || 0;
-  }
+  function getMasterOffset() { return parseInt(masterSlider.value, 10) || 0; }
 
   function syncMasterUI() {
     const offset = getMasterOffset();
     masterDelta.textContent = offset === 0 ? '±0' : (offset > 0 ? `+${offset}` : String(offset));
-    masterDelta.classList.toggle('up', offset > 0);
-    masterDelta.classList.toggle('down', offset < 0);
+    masterDelta.style.color = offset === 0 ? 'var(--text-muted)' : (offset > 0 ? 'var(--accent-2)' : 'var(--accent)');
   }
 
   function applyMasterOffset() {
@@ -1070,7 +799,6 @@
     CH.forEach(ch => {
       if (!ch.isStatic) {
         ch.baseValue = ch.value;
-        // A committed value is also the new pin for an individually locked model.
         if (ch.locked) ch.lockedValue = ch.value;
       }
     });
@@ -1082,21 +810,12 @@
     if (!ch.isStatic) ch.baseValue = clamp(ch.value - getMasterOffset(), 1, 100);
   }
 
-  // --- LEFT BAR RENDERING ---
-  // Rows live in a Map keyed by channel id. A row is built once and updated in
-  // place on every state change; appendChild() is only used to reorder.
   const leftRows = new Map();
   let leftAddBtn = null;
   let leftOrderKey = '';
 
-  // A channel whose structure changes (static/model, API/scrape, user/built-in)
-  // needs a new skeleton; everything else is an in-place update.
   function leftRowSignature(ch) {
-    return [
-      ch.isStatic ? 'static' : 'model',
-      ch.kind || '',
-      ch.isUser ? 'user' : 'builtin'
-    ].join('|');
+    return [ ch.isStatic ? 'static' : 'model', ch.kind || '', ch.isUser ? 'user' : 'builtin' ].join('|');
   }
 
   function createLeftRow(ch) {
@@ -1104,36 +823,31 @@
     row.className = 'llm-row';
     row.dataset.id = ch.id;
     row.dataset.sig = leftRowSignature(ch);
-    row.setAttribute('draggable', 'true');
 
     if (ch.isStatic) {
-      // Brave / Google: checkbox + drag handle only.
       row.innerHTML = `
         <div class="llm-head">
-          <span class="grab-handle" title="Drag to reorder">⋮⋮</span>
+          <span class="grab-handle" draggable="true" title="Drag to reorder">⋮⋮</span>
           <input type="checkbox" aria-label="Enable model">
           <span class="llm-emoji"></span>
           <span class="llm-name"></span>
-          <button class="remove-btn" hidden title="Remove provider" aria-label="Remove provider">✕</button>
+          <button class="remove-btn" hidden title="Remove provider">✕</button>
         </div>
         <div class="row-rail">
-          <button class="reorder-btn" data-dir="-1" title="Move up" aria-label="Move up">▲</button>
-          <button class="reorder-btn" data-dir="1" title="Move down" aria-label="Move down">▼</button>
+          <button class="reorder-btn" data-dir="-1" title="Move up">▲</button>
+          <button class="reorder-btn" data-dir="1" title="Move down">▼</button>
         </div>
       `;
     } else {
-      // Interactive model row: checkbox + handle + slider + lock + prefix edit.
-      // The prefix <select> was removed from the card to keep rows compact; the
-      // pencil in the header opens the prefix editor instead.
       row.innerHTML = `
         <div class="llm-head">
-          <span class="grab-handle" title="Drag to reorder">⋮⋮</span>
+          <span class="grab-handle" draggable="true" title="Drag to reorder">⋮⋮</span>
           <input type="checkbox" aria-label="Enable model">
           <span class="llm-emoji"></span>
           <span class="llm-name"></span>
-          <button class="lock-btn" title="Lock model" aria-label="Lock model" aria-pressed="false">🔓</button>
-          <button class="prefix-edit-btn" title="Edit custom prefix" aria-label="Edit custom prefix">✏️</button>
-          <button class="remove-btn" hidden title="Remove provider" aria-label="Remove provider">✕</button>
+          <button class="lock-btn" title="Lock model" aria-pressed="false">🔓</button>
+          <button class="prefix-edit-btn" title="Edit custom prefix">✏️</button>
+          <button class="remove-btn" hidden title="Remove provider">✕</button>
         </div>
         <div class="slider-row">
           <input type="range" min="1" max="100" step="1" value="50" aria-label="Detail level">
@@ -1141,8 +855,8 @@
         </div>
         <div class="prefix-preview"></div>
         <div class="row-rail">
-          <button class="reorder-btn" data-dir="-1" title="Move up" aria-label="Move up">▲</button>
-          <button class="reorder-btn" data-dir="1" title="Move down" aria-label="Move down">▼</button>
+          <button class="reorder-btn" data-dir="-1" title="Move up">▲</button>
+          <button class="reorder-btn" data-dir="1" title="Move down">▼</button>
         </div>
       `;
     }
@@ -1160,7 +874,6 @@
     });
   }
 
-  // Move a model one slot up/down and persist the new order.
   function moveChannel(id, delta) {
     const from = CH.findIndex(ch => ch.id === id);
     const to = from + (delta < 0 ? -1 : 1);
@@ -1171,8 +884,6 @@
     renderLeft();
   }
 
-  // Mini-rail: one emoji per enabled model. Rebuilt only when the set changes,
-  // so master-slider ticks and other frequent re-renders stay cheap.
   let miniRailKey = '';
   function renderMiniRail() {
     const rail = document.getElementById('miniEmojis');
@@ -1195,8 +906,6 @@
       el.className = 'mini-emoji';
       el.textContent = ch.emoji;
       el.title = ch.name;
-      el.setAttribute('role', 'img');
-      el.setAttribute('aria-label', ch.name);
       rail.appendChild(el);
     });
   }
@@ -1216,7 +925,7 @@
     row.querySelector('.llm-emoji').textContent = ch.emoji;
     const nameEl = row.querySelector('.llm-name');
     nameEl.textContent = ch.name;
-    nameEl.title = ch.name; // full name on hover when the row truncates it
+    nameEl.title = ch.name;
 
     const removeBtn = row.querySelector('.remove-btn');
     if (removeBtn) {
@@ -1225,12 +934,9 @@
     }
 
     updateReorderButtons(row, index);
-
     if (ch.isStatic) return;
 
     applyHeat(row, ch.value);
-    // Keep the pulse in sync after master-slider moves, refreshes, and reorders.
-    // The per-row slider writes ch.value; maxTokens is the provider budget.
     syncMaxHeat(row, ch.value === 100 || ch.maxTokens === 100);
 
     const badge = row.querySelector('.model-badge');
@@ -1259,10 +965,7 @@
     preview.title = prefixText;
   }
 
-  // Handlers read row._ch at event time: refreshProviders() replaces the CH
-  // objects, and a cached row must keep editing the current channel.
   function bindLeftRowEvents(row) {
-    // Checkbox state
     const checkbox = row.querySelector('input[type="checkbox"]');
     checkbox.onclick = (e) => e.stopPropagation();
     checkbox.onchange = () => {
@@ -1275,7 +978,6 @@
       updateTimer();
     };
 
-    // Per-model slider. A manual edit becomes the new baseline.
     const slider = row.querySelector('input[type="range"]');
     if (slider) {
       slider.oninput = () => {
@@ -1284,8 +986,6 @@
         ch.value = parseInt(slider.value, 10);
         commitMasterBaseline();
         applyHeat(row, ch.value);
-        // Max heat: the slider caps at 100. (maxTokens is the static provider
-        // budget and stays 1000 for most providers, so ch.value drives the pulse.)
         syncMaxHeat(row, ch.maxTokens === 100 || ch.value === 100);
         saveUiPrefs();
         updateHistory();
@@ -1294,7 +994,6 @@
       };
     }
 
-    // Reorder arrows on the right edge of the row.
     row.querySelectorAll('.reorder-btn').forEach(btn => {
       btn.onclick = (e) => {
         e.stopPropagation();
@@ -1304,20 +1003,14 @@
       };
     });
 
-    // Model lock at the far right of the header row
     const lockBtn = row.querySelector('.lock-btn');
     if (lockBtn) {
       lockBtn.onclick = (e) => {
         e.stopPropagation();
         const ch = row._ch;
         if (!ch) return;
-        if (ch.locked) {
-          ch.locked = false;
-          ch.lockedValue = null;
-        } else {
-          ch.locked = true;
-          ch.lockedValue = ch.value;
-        }
+        if (ch.locked) { ch.locked = false; ch.lockedValue = null; }
+        else { ch.locked = true; ch.lockedValue = ch.value; }
         rebaseModel(ch);
         saveUiPrefs();
         renderLeft();
@@ -1325,7 +1018,6 @@
       };
     }
 
-    // Pencil -> shared modal -> store the custom string back on CH
     const editBtn = row.querySelector('.prefix-edit-btn');
     if (editBtn) {
       editBtn.onclick = async (e) => {
@@ -1348,13 +1040,11 @@
       };
     }
 
-    // Interactive controls should not trigger row selection or row drag.
     row.querySelectorAll('input, select, button').forEach(el => {
       el.setAttribute('draggable', 'false');
       el.onmousedown = (e) => e.stopPropagation();
     });
 
-    // User-added providers can be removed; built-ins cannot.
     const removeBtn = row.querySelector('.remove-btn');
     if (removeBtn) {
       removeBtn.onclick = async (e) => {
@@ -1377,7 +1067,6 @@
       };
     }
 
-    // Clicking the row (outside a control/handle) toggles its checkbox.
     row.onclick = (e) => {
       if (e.target.closest('input, select, button, .grab-handle')) return;
       const ch = row._ch;
@@ -1388,25 +1077,18 @@
       updateTimer();
     };
 
-    // HTML5 drag-and-drop: dropping on a lower row inserts after it,
-    // dropping on a higher row inserts before it. The index is resolved from
-    // CH at event time, because rows are cached across reorders.
-    row.ondragstart = (e) => {
-      if (e.target.closest('input, select, button')) {
-        e.preventDefault();
-        return;
-      }
-      const ch = row._ch;
-      const index = ch ? CH.findIndex(c => c.id === ch.id) : -1;
-      if (index < 0) {
-        e.preventDefault();
-        return;
-      }
-      draggedIdx = index;
-      e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(index));
-      setTimeout(() => row.classList.add('dragging'), 0);
-    };
+    const grabHandle = row.querySelector('.grab-handle');
+    if (grabHandle) {
+      grabHandle.ondragstart = (e) => {
+        const ch = row._ch;
+        const index = ch ? CH.findIndex(c => c.id === ch.id) : -1;
+        if (index < 0) { e.preventDefault(); return; }
+        draggedIdx = index;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(index));
+        setTimeout(() => row.classList.add('dragging'), 0);
+      };
+    }
 
     row.ondragover = (e) => {
       if (draggedIdx === null) return;
@@ -1415,16 +1097,12 @@
       row.classList.add('drag-over');
     };
 
-    row.ondragleave = () => {
-      row.classList.remove('drag-over');
-    };
+    row.ondragleave = () => { row.classList.remove('drag-over'); };
 
     row.ondrop = (e) => {
       e.preventDefault();
       row.classList.remove('drag-over');
-      const from = draggedIdx !== null
-        ? draggedIdx
-        : parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const from = draggedIdx !== null ? draggedIdx : parseInt(e.dataTransfer.getData('text/plain'), 10);
       const ch = row._ch;
       const targetIndex = ch ? CH.findIndex(c => c.id === ch.id) : -1;
       if (!Number.isInteger(from) || targetIndex < 0 || from === targetIndex) {
@@ -1454,8 +1132,6 @@
       seen.add(ch.id);
       let row = leftRows.get(ch.id);
 
-      // Only a structural change rebuilds a row; text, classes, and attributes
-      // are always updated in place so animations survive.
       const signature = leftRowSignature(ch);
       if (row && row.dataset.sig !== signature) {
         row.remove();
@@ -1469,7 +1145,6 @@
       updateLeftRow(row, ch, index);
     });
 
-    // Drop rows for providers that no longer exist.
     leftRows.forEach((row, id) => {
       if (seen.has(id)) return;
       row.remove();
@@ -1480,12 +1155,9 @@
       leftAddBtn = document.createElement('button');
       leftAddBtn.className = 'add-custom-btn';
       leftAddBtn.textContent = '➕ Add Provider';
-      leftAddBtn.title = 'Add a website scraper or an OpenAI-compatible API endpoint';
       leftAddBtn.onclick = addCustomProvider;
     }
 
-    // Reorder only when the id order actually changed. appendChild() moves the
-    // cached nodes; no row is recreated.
     const orderKey = CH.map(ch => ch.id).join('\u0000');
     let orderChanged = orderKey !== leftOrderKey || leftAddBtn.parentNode !== list;
     CH.forEach(ch => {
@@ -1505,21 +1177,14 @@
     renderMiniRail();
   }
 
-  // --- MASTER LOCK BUTTON ---
   masterLock.onclick = (e) => {
     e.stopPropagation();
     masterLocked = !masterLocked;
     masterLock.classList.toggle('on', masterLocked);
     masterLock.setAttribute('aria-pressed', String(masterLocked));
     masterLock.textContent = masterLocked ? '🔒' : '🔓';
-    masterLock.title = masterLocked
-      ? 'Master Lock ON: overrides individual locks'
-      : 'Master Lock OFF: individual locks respected';
-    if (masterLocked) {
-      applyMasterOffset();
-    } else {
-      // Releasing the master lock hands control back to individual locks:
-      // restore each locked model to the value it was pinned at.
+    if (masterLocked) { applyMasterOffset(); }
+    else {
       CH.forEach(ch => {
         if (!ch.isStatic && ch.locked && ch.lockedValue != null) {
           ch.value = ch.lockedValue;
@@ -1531,12 +1196,6 @@
     updateTimer();
   };
 
-  // --- MASTER SLIDER: RELATIVE OFFSET, NOT ABSOLUTE VALUE ---
-  // Each model keeps its own baseValue. The master slider is an offset in
-  // the range -100..+100:
-  //   20/50 +10 -> 30/60, then back to 0 -> 20/50 exactly.
-  // Individual values clamp at 1/100, but the master offset can keep going
-  // until every model has reached the cap.
   masterSlider.oninput = () => {
     applyMasterOffset();
     syncMasterUI();
@@ -1546,7 +1205,6 @@
     updateTimer();
   };
 
-  // --- TRIO TOGGLE (Max heat for DeepSeek, Perplexity, Meta) ---
   const trio = document.getElementById('trioToggle');
   let trioOn = false;
   trio.onclick = () => {
@@ -1566,27 +1224,15 @@
     updateTimer();
   };
 
-  // --- CONVERSATION TREE STATE (T4) ---
-  // A conversation is a tree, not a flat array. `activeLeafId` points at the
-  // node on screen; the visible conversation is the path from that leaf up to
-  // its root, reversed. Branching later only needs to move `activeLeafId`.
-  const convo = {
-    version: 1,
-    nodes: {},
-    rootIds: [],
-    activeLeafId: null
-  };
+  const convo = { version: 1, nodes: {}, rootIds: [], activeLeafId: null };
   let activeTab = 'hybrid';
   const openState = {};
 
   function newTurnId() {
-    // randomUUID needs a secure context. file:// qualifies in Electron, but a
-    // fallback keeps the page working in browsers without crypto.randomUUID.
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
     return 't-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
   }
 
-  // Root -> active leaf, in display order.
   function activePath() {
     const path = [];
     const seen = new Set();
@@ -1599,43 +1245,20 @@
     return path.reverse();
   }
 
-  // Create a node and make it the active leaf. The caller supplies `id` on
-  // Send so the same turnId travels to main and back with every IPC message.
   function addTurn(parentId, prompt, engine, order, id = newTurnId()) {
     const node = {
-      id,
-      parentId: parentId || null,
-      childIds: [],
-      prompt,
-      engine,
-      replies: {},
-      order: [...order],
-      hybrid: {
-        text: 'Waiting for LLMs...',
-        status: 'pending',
-        log: '',
-        score: 0,
-        reason: '',
-        sources: [...order],
-        omitted: {}
-      },
-      locked: false,
-      createdAt: Date.now()
+      id, parentId: parentId || null, childIds: [], prompt, engine, replies: {}, order: [...order],
+      hybrid: { text: 'Waiting for LLMs...', status: 'pending', log: '', score: 0, reason: '', sources: [...order], omitted: {} },
+      locked: false, createdAt: Date.now()
     };
 
     convo.nodes[id] = node;
-    if (node.parentId && convo.nodes[node.parentId]) {
-      convo.nodes[node.parentId].childIds.push(id);
-    } else {
-      node.parentId = null;
-      convo.rootIds.push(id);
-    }
+    if (node.parentId && convo.nodes[node.parentId]) convo.nodes[node.parentId].childIds.push(id);
+    else { node.parentId = null; convo.rootIds.push(id); }
     convo.activeLeafId = id;
     return node;
   }
 
-  // Replies are {text, status, ms}. Strings are accepted so a conversation
-  // restored from an older shape still renders.
   function replyOf(node, id) {
     const reply = node && node.replies ? node.replies[id] : null;
     if (!reply) return null;
@@ -1643,7 +1266,6 @@
     return reply;
   }
 
-  // Open state is per node, not per turn number, so branches don't collide.
   const isOpen = (node, id) => !!openState[node.id + ':' + id];
   const setOpen = (node, id, v) => { openState[node.id + ':' + id] = v; };
 
@@ -1689,10 +1311,6 @@
   }
   function stripScore(raw) { return (raw || '').replace(/\n*SCORE:[\s\S]*$/i, '').trim(); }
 
-  // --- CONVERSATION RENDERING ---
-  // One element per node, cached by turn id. Streaming writes into the cached
-  // body; a re-render only updates text/classes/attributes. appendChild() is
-  // used to reorder turns, never to rebuild them.
   const turnEls = new Map();
   let convOrderKey = '';
 
@@ -1733,13 +1351,8 @@
     const host = document.createElement('div');
     el.appendChild(host);
 
-    el._tnum = tnum;
-    el._preview = preview;
-    el._ctxTag = ctxTag;
-    el._promptText = promptText;
-    el._host = host;
-    el._mode = null;
-    el._card = null;
+    el._tnum = tnum; el._preview = preview; el._ctxTag = ctxTag; el._promptText = promptText; el._host = host;
+    el._mode = null; el._card = null;
     return el;
   }
 
@@ -1798,22 +1411,7 @@
     sourceBar.append(spacer, sourcesBtn, allBtn);
     el.append(label, body, scoreBar, sourceBar);
 
-    return {
-      el,
-      turnId,
-      mode: 'hybrid',
-      label,
-      body,
-      scoreBar,
-      pct,
-      reason,
-      sourceBar,
-      spacer,
-      emojiEls: new Map(),
-      emojiOrder: '',
-      srcEls: new Map(),
-      srcOrder: ''
-    };
+    return { el, turnId, mode: 'hybrid', label, body, scoreBar, pct, reason, sourceBar, spacer, emojiEls: new Map(), emojiOrder: '', srcEls: new Map(), srcOrder: '' };
   }
 
   function buildReplyCard(t) {
@@ -1914,7 +1512,6 @@
       refs.reason.textContent = hybrid.reason || '';
     }
 
-    // Source emoji buttons, keyed by channel id.
     const order = (t.order || []).filter(id => CH.some(ch => ch.id === id));
     const wanted = new Set(order);
     refs.emojiEls.forEach((btn, id) => {
@@ -1942,9 +1539,7 @@
       const omitted = hybrid.omitted && hybrid.omitted[id];
       const isSrc = (hybrid.sources || []).includes(id);
       btn.textContent = ch.emoji;
-      btn.className = 'src-emoji'
-        + (isOpen(t, id) ? ' on' : '')
-        + (omitted || !isSrc ? ' omitted' : '');
+      btn.className = 'src-emoji' + (isOpen(t, id) ? ' on' : '') + (omitted || !isSrc ? ' omitted' : '');
       btn.title = ch.name + (omitted ? ' — omitted: ' + omitted : '');
     });
 
@@ -1954,7 +1549,6 @@
       refs.emojiOrder = emojiOrder;
     }
 
-    // Expanded source replies, keyed by channel id.
     const sourceIds = order.filter(id => replyOf(t, id));
     const wantedSources = new Set(sourceIds);
     refs.srcEls.forEach((src, id) => {
@@ -2010,9 +1604,7 @@
     el._ctxTag.hidden = !inCtx;
     if (el._promptText.textContent !== t.prompt) el._promptText.textContent = t.prompt;
 
-    const mode = activeTab === 'hybrid'
-      ? (t.hybrid ? 'hybrid' : 'none')
-      : (replyOf(t, activeTab) ? 'reply' : 'none');
+    const mode = activeTab === 'hybrid' ? (t.hybrid ? 'hybrid' : 'none') : (replyOf(t, activeTab) ? 'reply' : 'none');
 
     if (mode === 'none') {
       if (el._mode !== 'none') {
@@ -2023,8 +1615,6 @@
       return;
     }
 
-    // The turn element survives tab switches; only the card skeleton inside it
-    // is rebuilt when the card kind changes.
     if (el._mode !== mode) {
       el._host.innerHTML = '';
       el._card = mode === 'hybrid' ? buildHybridCard(t) : buildReplyCard(t);
@@ -2040,7 +1630,6 @@
     const wrap = document.getElementById('convWrap');
     const depth = parseInt(document.getElementById('hsRange').value, 10) || 0;
     const path = activePath();
-    // Context is the last `depth` nodes of the active path.
     const ctxStart = Math.max(0, path.length - depth);
     const seen = new Set();
 
@@ -2054,14 +1643,12 @@
       updateTurnEl(el, t, idx, idx >= ctxStart);
     });
 
-    // Drop turns that are no longer on the active path.
     turnEls.forEach((el, id) => {
       if (seen.has(id)) return;
       el.remove();
       turnEls.delete(id);
     });
 
-    // Reorder only when the path order changed or an element is not attached.
     const orderKey = JSON.stringify(path.map(t => t.id));
     let orderChanged = orderKey !== convOrderKey || wrap.children.length !== path.length;
     path.forEach(t => {
@@ -2078,12 +1665,10 @@
     }
   }
 
-  // --- HISTORY CONTEXT CALCULATIONS ---
   const hsRange = document.getElementById('hsRange');
   const hsPreview = document.getElementById('hsPreview');
   const hsDepth = document.getElementById('hsDepth');
   const hsTok = document.getElementById('hsTok');
-  const hsMeta = document.getElementById('hsMeta');
   const hsNext = document.getElementById('hsNext');
 
   const est = s => Math.ceil((s || '').length / 4);
@@ -2093,7 +1678,6 @@
     if (t.hybrid) n += est(t.hybrid.text);
     return n;
   }
-  // History depth is the last `d` nodes of the active path (T4).
   function historyNodes(d) {
     const path = activePath();
     const depth = Math.max(0, Math.min(d || 0, path.length));
@@ -2115,13 +1699,11 @@
       hsDepth.textContent = d + ' turn' + (d === 1 ? '' : 's');
     }
     hsTok.textContent = tokUpTo(d) + ' tok';
-    hsMeta.textContent = d === 0 ? `0 of ${path.length} — fresh` : `${d} of ${path.length} in context`;
     hsNext.textContent = '~' + estimateSend().toFixed(1) + 's';
     renderConv();
   }
   hsRange.oninput = updateHistory;
 
-  // --- STATUSBAR TIMINGS & ANIMATION ---
   const sbTimer = document.getElementById('sbTimer');
   const sbStatus = document.getElementById('sbStatus');
   const sbProgress = document.getElementById('sbProgress');
@@ -2149,7 +1731,7 @@
     const estSec = estimateSend();
     inflight = { start: Date.now(), est: estSec, total: active.length, left: active.length };
     sbStatus.textContent = `sending to ${active.length}`;
-    sbProgress.style.display = 'block';
+    if (sbProgress) sbProgress.style.display = 'block';
     if (ticker) clearInterval(ticker);
     ticker = setInterval(tick, 100);
   }
@@ -2157,7 +1739,7 @@
     if (!inflight) return;
     const elapsed = (Date.now() - inflight.start) / 1000;
     const left = Math.max(0, inflight.est - elapsed);
-    sbFill.style.width = Math.min(100, (elapsed / inflight.est) * 100) + '%';
+    if (sbFill) sbFill.style.width = Math.min(100, (elapsed / inflight.est) * 100) + '%';
     sbTimer.textContent = left > 0 ? `${left.toFixed(1)}s left` : 'finishing…';
     sbStatus.textContent = `${inflight.total - inflight.left}/${inflight.total} done · ${elapsed.toFixed(1)}s`;
     if (Math.random() < 0.03 && inflight.left > 0) inflight.left--;
@@ -2167,13 +1749,12 @@
       sbTimer.textContent = `✓ done in ${elapsed.toFixed(1)}s`;
       sbStatus.textContent = `${inflight.total} replies`;
       setTimeout(() => {
-        inflight = null; sbProgress.style.display = 'none';
-        sbFill.style.width = '0%'; sbStatus.textContent = 'idle'; updateTimer();
+        inflight = null; if (sbProgress) sbProgress.style.display = 'none';
+        if (sbFill) sbFill.style.width = '0%'; sbStatus.textContent = 'idle'; updateTimer();
       }, 2600);
     }
   }
 
-  // --- LEGEND DIALOG ---
   const LEGENDS = {
     idle: [
       ['🔒', 'Master Lock / Model Lock: Master overrides individual locks; a model lock freezes that slider.'],
@@ -2189,10 +1770,6 @@
       ['🦁', 'Source Emoji: Inspect that individual raw model output.'],
       ['⊞ View Sources', 'Opens replies contributing to the synthesis.'],
       ['⊞ Expand All', 'Expands/collapses all outputs for the current turn.']
-    ],
-    summary: [
-      ['🆓', 'Summary Bench: Free API summarization pipelines.'],
-      ['⚡', 'Groq API'], ['🧠', 'Cerebras'], ['🟩', 'NVIDIA NIM']
     ]
   };
 
@@ -2214,12 +1791,12 @@
   const legendDrop = document.getElementById('legendDrop');
   legendPill.onclick = (e) => {
     e.stopPropagation();
-    legendDrop.classList.toggle('open');
+    legendDrop.style.display = legendDrop.style.display === 'none' ? 'block' : 'none';
     legendPill.classList.toggle('open');
   };
   document.addEventListener('click', (e) => {
     if (!legendDrop.contains(e.target) && e.target !== legendPill) {
-      legendDrop.classList.remove('open'); legendPill.classList.remove('open');
+      legendDrop.style.display = 'none'; legendPill.classList.remove('open');
     }
   });
 
@@ -2231,198 +1808,99 @@
     renderConv();
   }
 
-  // --- COLLAPSIBLE SIDEBAR: 260px panel <-> 50px mini-rail (Anime.js) ---
-  // The grid track animates between the two widths. `.lb-full` keeps its fixed
-  // 260px width and is clipped/cross-faded, so model rows never reflow mid-tween.
-  const appEl = document.querySelector('.app');
-  const leftbarEl = document.querySelector('.leftbar');
-  const sidebarToggle = document.getElementById('sidebarToggle');
-  const miniToggle = document.getElementById('miniToggle');
-  const SIDEBAR_WIDTH = 260;
-  const SIDEBAR_MINI_WIDTH = 50;
-  let sidebarCollapsed = false;
-  let sidebarAnims = [];
-
-  function setSidebarCollapsed(collapsed) {
-    if (collapsed === sidebarCollapsed) return;
-    sidebarCollapsed = collapsed;
-
-    // A fast double-click must not leave two competing tweens on the grid.
-    sidebarAnims.forEach(anim => anim.cancel());
-    sidebarAnims = [];
-
-    appEl.classList.toggle('sidebar-collapsed', collapsed);
-    leftbarEl.classList.toggle('collapsed', collapsed);
-
-    const label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
-    [sidebarToggle, miniToggle].forEach(btn => {
-      if (!btn) return;
-      btn.setAttribute('aria-expanded', String(!collapsed));
-      btn.setAttribute('aria-label', label);
-      btn.title = label;
-    });
-
-    const gridWidth = collapsed ? `${SIDEBAR_MINI_WIDTH}px` : `${SIDEBAR_WIDTH}px`;
-    const canAnimate = window.anime?.animate && !reduceMotionQuery.matches;
-
-    if (!canAnimate) {
-      // Graceful fallback: commit the width without motion.
-      appEl.style.setProperty('--sidebar-w', gridWidth);
-      return;
-    }
-
-    sidebarAnims.push(anime.animate(appEl, {
-      '--sidebar-w': gridWidth,
-      duration: 320,
-      ease: 'inOutQuad'
-    }));
-  }
-
-  sidebarToggle.onclick = () => setSidebarCollapsed(!sidebarCollapsed);
-  if (miniToggle) miniToggle.onclick = () => setSidebarCollapsed(false);
-
-  // --- INITIALIZE UI ---
   syncMasterUI();
   setLegendContext('idle');
-  // Providers arrive from main; CH is populated and rendered when they land.
   refreshProviders();
 
-
-  // ==========================================
   // --- ELECTRON APP INTEGRATION ---
-  // ==========================================
 
-  // 1. Clear Chat
   window.clearChat = () => {
-    convo.nodes = {};
-    convo.rootIds = [];
-    convo.activeLeafId = null;
+    convo.nodes = {}; convo.rootIds = []; convo.activeLeafId = null;
     Object.keys(openState).forEach(key => delete openState[key]);
     hsRange.value = '0';
-    renderAll();
-    updateHistory();
+    renderAll(); updateHistory();
   };
 
-  // 2. Settings: store the DeepSeek key via the encrypted key store
   const settingsBtn = document.getElementById('settingsBtn');
   if (settingsBtn) {
     settingsBtn.onclick = async () => {
       if (!window.api?.hasKey || !window.api?.setKey) {
-        alert('Settings are available in the Electron desktop app.');
-        return;
+        alert('Settings are available in the Electron desktop app.'); return;
       }
-
       let configured = false;
-      try {
-        configured = await window.api.hasKey('deepseek');
-      } catch {
-        // Fall through to the prompt; saving will surface any real error.
-      }
+      try { configured = await window.api.hasKey('deepseek'); } catch {}
 
       const message = configured
         ? 'A DeepSeek API key is already configured. Enter a new key to replace it.'
-        : 'Enter your DeepSeek API key. It is encrypted by the operating system and never stored in the page. An environment variable, if set, takes precedence.';
+        : 'Enter your DeepSeek API key. It is encrypted by the operating system and never stored in the page.';
       const values = await showAppModal({
-        title: 'DeepSeek API Key',
-        message,
-        confirmLabel: 'Save',
-        fields: [{
-          name: 'key',
-          label: 'API key',
-          type: 'password',
-          placeholder: 'sk-...',
-          required: true
-        }]
+        title: 'DeepSeek API Key', message, confirmLabel: 'Save',
+        fields: [{ name: 'key', label: 'API key', type: 'password', placeholder: 'sk-...', required: true }]
       });
       if (!values) return;
-
       try {
         const result = await window.api.setKey('deepseek', values.key.trim());
-        if (result?.ok) {
-          alert('DeepSeek API key saved securely.');
-        } else {
-          alert(result?.error || 'Could not save the DeepSeek API key.');
-        }
-      } catch (error) {
-        alert(`Could not save the DeepSeek API key: ${error.message}`);
-      }
+        if (result?.ok) alert('DeepSeek API key saved securely.');
+        else alert(result?.error || 'Could not save the DeepSeek API key.');
+      } catch (error) { alert(`Could not save the DeepSeek API key: ${error.message}`); }
     };
   }
 
-  // 3. Send Button Action
-  document.getElementById('sendBtn').onclick = () => {
-    const promptText = document.getElementById('masterText').value.trim();
+  function submitPrompt() {
+    const promptText = masterTextEl.value.trim();
     if (!promptText) return;
 
     const active = CH.filter(c => c.checked);
     const activeModels = active.map(c => c.id);
     if (activeModels.length === 0) return alert("Select at least one model.");
 
-    const engine = document.getElementById('engineToggle').value;
-
-    // The renderer owns the id: it is created here, stored on the node, and
-    // echoed back by main in every IPC payload for this turn.
+    const engine = document.getElementById('engineToggle')?.value || 'Local GPU';
     const turnId = newTurnId();
     addTurn(convo.activeLeafId, promptText, engine, activeModels, turnId);
 
-    document.getElementById('masterText').value = '';
-    renderAll();
-    updateTimer();
-    startSend();
+    masterTextEl.value = '';
+    if (document.getElementById('miniText')) document.getElementById('miniText').value = '';
+    renderAll(); updateTimer(); startSend();
 
     if (window.api?.sendPrompt) {
       window.api.sendPrompt({ turnId, promptText, activeModels, engine });
     }
-  };
+  }
 
-  // 4. LLM Individual Replies via IPC
-  // Payloads carry their turnId, so a late reply can never land in a newer
-  // turn (B1).
+  document.getElementById('sendBtn').onclick = submitPrompt;
+  if (document.getElementById('miniSendBtn')) document.getElementById('miniSendBtn').onclick = submitPrompt;
+  if (document.getElementById('miniText')) {
+    document.getElementById('miniText').onkeydown = (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); submitPrompt(); }
+    };
+  }
+
   if (window.api?.onReplyReceived) {
     window.api.onReplyReceived(({ turnId, model, text, status, ms }) => {
       const turn = convo.nodes[turnId];
       if (!turn) return;
-
-      turn.replies[model] = {
-        text: text || '',
-        status: status || 'success',
-        ms: Number(ms) || 0
-      };
-      if (!turn.order.includes(model)) {
-        turn.order.push(model);
-      }
-
-      // A locked (finished) turn keeps its synthesized answer.
+      turn.replies[model] = { text: text || '', status: status || 'success', ms: Number(ms) || 0 };
+      if (!turn.order.includes(model)) turn.order.push(model);
       if (status !== 'loading' && !turn.locked) {
         turn.hybrid.text = "Synthesizing...";
         turn.hybrid.status = 'synthesizing';
-        turn.hybrid.reason = String(turn.engine || '').includes('Cloud')
-          ? "Running DeepSeek cloud synthesis..."
-          : "Running local OpenVINO model...";
+        turn.hybrid.reason = String(turn.engine || '').includes('Cloud') ? "Running DeepSeek cloud synthesis..." : "Running local OpenVINO model...";
       }
       renderAll();
     });
   }
 
-  // 5. Hybrid Stream via IPC
   if (window.api?.onHybridStream) {
     window.api.onHybridStream(({ turnId, chunk }) => {
       const turn = convo.nodes[turnId];
       if (!turn || !turn.hybrid) return;
-
       const placeholder = turn.hybrid.text;
-      if (placeholder === "Synthesizing..." || placeholder === "Waiting for LLMs...") {
-        turn.hybrid.text = "";
-      }
+      if (placeholder === "Synthesizing..." || placeholder === "Waiting for LLMs...") turn.hybrid.text = "";
       turn.hybrid.text += chunk || '';
       turn.hybrid.status = 'streaming';
 
-      // Target the cached turn element, not "the last .hybrid-body" (B2). The
-      // keyed renderer keeps the body alive, so streaming writes are not lost.
       const turnEl = turnEls.get(turnId);
-      const hybridBody = turnEl
-        ? turnEl.querySelector('.hybrid-body[data-kind="hybrid"]')
-        : null;
+      const hybridBody = turnEl ? turnEl.querySelector('.hybrid-body[data-kind="hybrid"]') : null;
       if (hybridBody) {
         hybridBody.textContent = turn.hybrid.text;
         const centerPanel = document.querySelector('.center');
@@ -2431,19 +1909,14 @@
     });
   }
 
-  // 6. Hybrid Synthesis Complete via IPC
   if (window.api?.onHybridComplete) {
     window.api.onHybridComplete((payload = {}) => {
       const turn = convo.nodes[payload.turnId];
       if (!turn) return;
-
       turn.hybrid.status = 'complete';
       turn.hybrid.score = 100;
       turn.hybrid.reason = "Synthesis Complete";
-      // A completed turn is locked (T4). Its prompt and replies stay put.
       turn.locked = true;
-
-      // Re-render from state so this node's score bar is the one updated.
       renderAll();
     });
   }
