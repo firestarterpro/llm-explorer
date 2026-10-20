@@ -138,6 +138,23 @@
   .src-reply { display: none; background: rgba(0,0,0,0.5); padding: 12px; border-radius: 8px; margin-top: 8px; font-size: 13px; }
   .src-reply.open { display: block; }
 
+  /* --- BRANCHING --- */
+  .topbar { position: relative; }
+  .turn-actions { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .fork-btn { background: transparent; border: 1px solid var(--border); color: var(--text-muted); padding: 3px 8px; border-radius: 5px; font-family: inherit; font-size: 11px; cursor: pointer; transition: 0.2s; }
+  .fork-btn:hover { color: var(--accent); border-color: var(--accent); background: rgba(0, 240, 255, 0.06); }
+  .branch-tag { font-size: 11px; color: var(--accent); opacity: 0.75; white-space: nowrap; }
+  .branch-tag:empty { display: none; }
+  .branch-drop { position: absolute; top: calc(100% + 6px); right: 12px; width: 340px; max-width: calc(100vw - 32px); background: var(--panel-glass); border: 1px solid var(--accent); border-radius: 10px; padding: 10px; z-index: 60; backdrop-filter: blur(12px); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
+  .branch-drop[hidden] { display: none; }
+  .branch-drop-title { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); padding: 2px 6px 8px; }
+  .branch-list { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; }
+  .topbar .branch-item { display: block; width: 100%; text-align: left; padding: 8px 10px; border: 1px solid var(--border); border-radius: 7px; background: rgba(255,255,255,0.03); color: var(--text); cursor: pointer; font: inherit; font-size: 13px; transition: 0.2s; }
+  .topbar .branch-item:hover { border-color: var(--accent); background: rgba(0, 240, 255, 0.06); }
+  .topbar .branch-item.active { border-color: var(--accent); color: var(--accent); }
+  .branch-item .bi-meta { display: block; color: var(--text-muted); font-size: 11px; margin-top: 3px; }
+  .branch-empty { padding: 8px 10px; color: var(--text-muted); font-size: 12px; }
+
   /* --- RIGHT RAIL (Prompt) --- */
   .right-rail { width: 340px; }
   .prompt-area { padding: 16px; display: flex; flex-direction: column; flex: 1; gap: 12px; }
@@ -272,8 +289,14 @@
       <button id="newChatBtn" onclick="clearChat()">🗑️ New Chat</button>
       <button id="settingsBtn">⚙ Settings</button>
       <button class="legend-pill" id="legendPill">📖 Legend ▾</button>
-      <button class="branch-pill">🌿 Branch ▾</button>
+      <button class="branch-pill" id="branchPill">🌿 Branch ▾</button>
       <span class="top-status" id="sbStatus" style="font-size: 12px; color: var(--text-muted);">idle</span>
+
+      <!-- Branch Dropdown -->
+      <div class="branch-drop" id="branchDrop" hidden>
+        <div class="branch-drop-title">🌿 Sibling branches</div>
+        <div class="branch-list" id="branchList"></div>
+      </div>
     </div>
 
     <!-- Legend Dropdown -->
@@ -1432,7 +1455,23 @@
     logBtn.title = 'Channel log';
     logBtn.textContent = '📜';
 
-    head.append(tnum, dot, preview, ctxTag, logBtn);
+    const forkBtn = document.createElement('button');
+    forkBtn.className = 'fork-btn';
+    forkBtn.title = 'Fork a sibling branch from this prompt';
+    forkBtn.textContent = '🌿 Fork';
+    forkBtn.onclick = (e) => {
+      e.stopPropagation();
+      forkTurn(t.id);
+    };
+
+    const branchTag = document.createElement('span');
+    branchTag.className = 'branch-tag';
+
+    const actions = document.createElement('span');
+    actions.className = 'turn-actions';
+    actions.append(branchTag, logBtn, forkBtn);
+
+    head.append(tnum, dot, preview, ctxTag, actions);
     el.appendChild(head);
 
     const promptCard = document.createElement('div');
@@ -1448,6 +1487,7 @@
     el.appendChild(host);
 
     el._tnum = tnum; el._preview = preview; el._ctxTag = ctxTag; el._promptText = promptText; el._host = host;
+    el._branchTag = branchTag;
     el._mode = null; el._card = null;
     return el;
   }
@@ -1699,7 +1739,7 @@
     }
   }
 
-  function updateTurnEl(el, t, index, inCtx) {
+  function updateTurnEl(el, t, index, inCtx, activeChildId = null) {
     el.classList.toggle('in-ctx', inCtx);
     if (t.locked) el.dataset.locked = '1'; else delete el.dataset.locked;
 
@@ -1708,6 +1748,18 @@
     if (el._preview.textContent !== preview) el._preview.textContent = preview;
     el._ctxTag.hidden = !inCtx;
     if (el._promptText.textContent !== t.prompt) el._promptText.textContent = t.prompt;
+
+    const children = (t.childIds || []).filter(id => convo.nodes[id]);
+    if (children.length > 1) {
+      const position = Math.max(0, children.indexOf(activeChildId)) + 1;
+      const label = `(${position} of ${children.length} branches)`;
+      if (el._branchTag.textContent !== label) el._branchTag.textContent = label;
+      el._branchTag.title = 'Use 🌿 Branch to switch paths';
+      el._branchTag.hidden = false;
+    } else {
+      el._branchTag.hidden = true;
+      el._branchTag.textContent = '';
+    }
 
     const mode = activeTab === 'hybrid' ? (t.hybrid ? 'hybrid' : 'none') : (replyOf(t, activeTab) ? 'reply' : 'none');
 
@@ -1738,6 +1790,10 @@
     const ctxStart = Math.max(0, path.length - depth);
     const seen = new Set();
 
+    // The active child of each node, so a forked node can say which branch is shown.
+    const nextOnPath = new Map();
+    for (let i = 0; i < path.length - 1; i++) nextOnPath.set(path[i].id, path[i + 1].id);
+
     path.forEach((t, idx) => {
       seen.add(t.id);
       let el = turnEls.get(t.id);
@@ -1745,7 +1801,7 @@
         el = createTurnEl(t);
         turnEls.set(t.id, el);
       }
-      updateTurnEl(el, t, idx, idx >= ctxStart);
+      updateTurnEl(el, t, idx, idx >= ctxStart, nextOnPath.get(t.id) || null);
     });
 
     turnEls.forEach((el, id) => {
@@ -1797,10 +1853,10 @@
     const last = included.length ? included[included.length - 1] : null;
 
     if (!last) {
-      hsPreview.innerHTML = `<strong>0:</strong> fresh — no prior context`;
+      if (hsPreview) hsPreview.innerHTML = `<strong>0:</strong> fresh — no prior context`;
       hsDepth.textContent = '0 turns';
     } else {
-      hsPreview.innerHTML = `<strong>T${path.length}:</strong> "${esc(last.prompt.slice(0, 60))}${last.prompt.length > 60 ? '…' : ''}"`;
+      if (hsPreview) hsPreview.innerHTML = `<strong>T${path.length}:</strong> "${esc(last.prompt.slice(0, 60))}${last.prompt.length > 60 ? '…' : ''}"`;
       hsDepth.textContent = d + ' turn' + (d === 1 ? '' : 's');
     }
     hsTok.textContent = tokUpTo(d) + ' tok';
@@ -1905,6 +1961,141 @@
       legendDrop.style.display = 'none'; legendPill.classList.remove('open');
     }
   });
+
+  // --- BRANCHING UI (T14) ---------------------------------------------------
+  const branchPill = document.getElementById('branchPill');
+  const branchDrop = document.getElementById('branchDrop');
+  const branchList = document.getElementById('branchList');
+
+  function nodePreview(node, max = 64) {
+    const text = String((node && node.prompt) || '').replace(/\s+/g, ' ').trim();
+    if (!text) return '(empty prompt)';
+    return text.length > max ? text.slice(0, max) + '…' : text;
+  }
+
+  // Siblings of `nodeId` at its own level: children of its parent, or roots.
+  function branchSiblings(nodeId) {
+    const node = nodeId ? convo.nodes[nodeId] : null;
+    const parent = node && node.parentId ? convo.nodes[node.parentId] : null;
+    const ids = parent ? parent.childIds : convo.rootIds;
+    return (ids || []).filter(id => convo.nodes[id]);
+  }
+
+  // The child of `parentId` that sits on the path ending at `leafId`.
+  function pathChildOf(leafId, parentId) {
+    let id = leafId;
+    const seen = new Set();
+    while (id && convo.nodes[id] && !seen.has(id)) {
+      seen.add(id);
+      if ((convo.nodes[id].parentId || null) === (parentId || null)) return id;
+      id = convo.nodes[id].parentId;
+    }
+    return null;
+  }
+
+  // Follow the most recent child so the whole branch is visible after switching.
+  function tailLeaf(id) {
+    let cur = id;
+    const seen = new Set();
+    while (cur && convo.nodes[cur] && !seen.has(cur)) {
+      seen.add(cur);
+      const kids = (convo.nodes[cur].childIds || []).filter(k => convo.nodes[k]);
+      if (!kids.length) break;
+      cur = kids[kids.length - 1];
+    }
+    return cur;
+  }
+
+  function renderBranchDrop() {
+    if (!branchList) return;
+    branchList.innerHTML = '';
+
+    const siblings = branchSiblings(convo.activeLeafId);
+    if (!siblings.length) {
+      const empty = document.createElement('div');
+      empty.className = 'branch-empty';
+      empty.textContent = 'No branches yet. Send a prompt or fork a turn.';
+      branchList.appendChild(empty);
+      return;
+    }
+
+    const leaf = convo.nodes[convo.activeLeafId];
+    const parentId = leaf ? leaf.parentId : null;
+    const activeSibling = pathChildOf(convo.activeLeafId, parentId);
+
+    siblings.forEach(id => {
+      const node = convo.nodes[id];
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'branch-item' + (id === activeSibling ? ' active' : '');
+
+      const title = document.createElement('span');
+      title.textContent = `🌿 ${nodePreview(node)}`;
+
+      const replyCount = Object.keys(node.replies || {}).length;
+      const meta = document.createElement('span');
+      meta.className = 'bi-meta';
+      meta.textContent = `${replyCount} repl${replyCount === 1 ? 'y' : 'ies'}`
+        + (id === activeSibling ? ' · current path' : '');
+
+      button.append(title, meta);
+      button.onclick = () => switchBranch(id);
+      branchList.appendChild(button);
+    });
+  }
+
+  function switchBranch(id) {
+    if (!id || !convo.nodes[id]) return;
+    convo.activeLeafId = tailLeaf(id);
+    if (branchDrop) branchDrop.hidden = true;
+    if (branchPill) branchPill.classList.remove('open');
+    renderAll();
+    updateHistory();
+    updateTimer();
+  }
+
+  if (branchPill && branchDrop) {
+    branchPill.onclick = (e) => {
+      e.stopPropagation();
+      const willOpen = branchDrop.hidden;
+      branchDrop.hidden = !willOpen;
+      branchPill.classList.toggle('open', willOpen);
+      if (willOpen) renderBranchDrop();
+    };
+  }
+
+  document.addEventListener('click', (e) => {
+    if (!branchDrop || branchDrop.hidden) return;
+    if (branchDrop.contains(e.target) || e.target === branchPill) return;
+    branchDrop.hidden = true;
+    branchPill.classList.remove('open');
+  });
+
+  async function forkTurn(turnId) {
+    const node = convo.nodes[turnId];
+    if (!node) return;
+
+    const values = await showAppModal({
+      title: 'Fork conversation',
+      message: 'This creates a sibling branch from the same parent. Your current path is preserved.',
+      confirmLabel: 'Fork',
+      fields: [{ name: 'prompt', label: 'Prompt', value: node.prompt || '', required: true }]
+    });
+    if (!values) return;
+
+    const promptText = String(values.prompt || '').trim();
+    if (!promptText) return;
+
+    // Keep the original turn's model set so the branches stay comparable.
+    const order = (node.order || []).filter(id => CH.some(ch => ch.id === id));
+    const activeModels = order.length ? order : CH.filter(c => c.checked).map(c => c.id);
+    if (!activeModels.length) { alert('Select at least one model.'); return; }
+
+    const engine = node.engine || currentEngine();
+    lastPrompt = { promptText, activeModels: [...activeModels], engine };
+    dispatchPrompt(promptText, activeModels, engine, node.parentId);
+    if (branchDrop && !branchDrop.hidden) renderBranchDrop();
+  }
 
   function renderAll() {
     const count = activePath().length;
