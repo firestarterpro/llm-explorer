@@ -1,7 +1,7 @@
 # Phase 3.5 Pre-Refactor Audit
 
 Reviewed against the working tree on 2026-10-19 (uncommitted changes included).
-`synthesize.py` lives at `C:\llm\src\synthesize.py`, outside this repo, so it was not reviewed.
+`synthesize.py` lives at `C:\Templar Archives\Cybernetics Core\llm\src\synthesize.py`, outside this repo, so it was not reviewed.
 
 Line numbers refer to the current files: `main.js` (385), `scrapers.js` (133),
 `preload.js` (11), `index.html` (1341; `<script>` is lines 418–1339).

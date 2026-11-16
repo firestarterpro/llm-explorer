@@ -42,7 +42,7 @@ const { chromium } = require('playwright');
 - **Playwright version:** 1.64.1, which expects `chromium-1248` (Chrome for Testing 156.0.8078.4). It resolves the browser folder from `PLAYWRIGHT_BROWSERS_PATH` once, at module load (`node_modules/playwright-core/lib/coreBundle.js` ~line 34465).
 - **winldd must ship too.** At launch, Playwright re-validates Windows DLL dependencies with `winldd` (PrintDeps.exe) whenever the `DEPENDENCIES_VALIDATED` marker is older than 30 days (`coreBundle.js` ~34979, called from launch ~41204). Without `winldd-*`, scraping would start failing about 30 days after a build.
 - **Anime.js isn't installed anywhere.** It's missing from `package.json`, `node_modules` and the asar. `index.html:7` loads a missing file, and every animation silently no-ops because of the `window.anime?.animate` guard (`index.html:1103`).
-- **`synthesize.py` is outside the repo.** It lives at `C:\llm\src\synthesize.py`, and the Local engine depends on hard-coded `C:\llm\...` paths plus a separate OVMS server.
+- **`synthesize.py` is outside the repo.** It lives at `C:\Templar Archives\Cybernetics Core\llm\src\synthesize.py`, and the Local engine depends on hard-coded `C:\Templar Archives\Cybernetics Core\llm\...` paths plus a separate OVMS server.
 - **Earlier audit:** `docs/phase-3.5-audit.md` items still open: B7, B8, 1.1, 1.2, 1.3, 3.2, 3.3, 6.2.
 
 ---
@@ -65,7 +65,7 @@ The main-process architecture is sound: registry merge, adapter/dispatcher split
 | F1 | Blocker | No browser in the installer (see §2) | `package.json`, `scrapers.js:38` |
 | F2 | Blocker | Onboarding "Cloud" saves the key but never calls `setEngine('Cloud')`. Both selects and main default to Local GPU, so the first prompt opens the OVMS modal | `index.html:368,397,2536`, `main.js:752` |
 | F3 | Blocker | Onboarding presents Cloud *vs* scrapers, but DeepSeek only **synthesizes**: sources are always the checked providers (Brave and Google via Playwright). The Cloud card copy ("no browser automation") is wrong | `index.html:441-478` |
-| F4 | Blocker | Local engine paths are hard-coded to `C:\llm\...` | `main.js:8-9` |
+| F4 | Blocker | Local engine paths are hard-coded to `C:\Templar Archives\Cybernetics Core\llm\...` | `main.js:8-9` |
 | F5 | High | Anime.js missing (see §2) | `index.html:7` |
 | F6 | High | Prefix, detail sliders, master slider, trio toggle, max tokens, fidelity and History Context depth never reach any model. `dispatchPrompt` sends only `{turnId, promptText, activeModels, engine}` | `index.html:2589-2597` |
 | F7 | High | The synthesizer never receives the user's question. Sources are labeled "SOURCE n" with no model names | `main.js:563-571`, `main.js:440` |
@@ -143,7 +143,7 @@ Order: finish A → B → C (blockers + security), then E → D → F → G → 
 ## 6. Verification checklist
 
 - **Packaging:** `npm run build:win`. Confirm `dist/win-unpacked/resources/ms-playwright/chromium-1248` and `winldd-1007` exist. Rename `%LOCALAPPDATA%\ms-playwright`, or use a separate Windows account, then run Login Mode and a Brave scrape from the installed `.exe`.
-- **Onboarding:** clear `llmx.onboarded` and `llmx.engine.v1`, take the Cloud path, and send a prompt. It must synthesize via DeepSeek with no OVMS modal. Rename `C:\llm\ov_env` and check that Local is hidden.
+- **Onboarding:** clear `llmx.onboarded` and `llmx.engine.v1`, take the Cloud path, and send a prompt. It must synthesize via DeepSeek with no OVMS modal. Rename `C:\Templar Archives\Cybernetics Core\llm\ov_env` and check that Local is hidden.
 - **Concurrency:** two rapid sends with the same provider → no profile-lock error, ≤3 browsers. Quit mid-scrape → no orphan `chrome.exe`.
 - **Security:** `api.addProvider({kind:'api', name:'x', endpoint:'https://example.com', modelId:'m', keyRef:'deepseek'})` → the stored `keyRef` is `provider:x`. A dropped file doesn't navigate the window.
 - **Persistence:** 2 turns + a fork, restart → the tree and active branch are restored.
@@ -153,6 +153,6 @@ Order: finish A → B → C (blockers + security), then E → D → F → G → 
 
 ## 7. Notes for whoever continues
 
-- The Local engine's input format (step E) can't be finished without editing `C:\llm\src\synthesize.py`, which is outside this repo.
+- The Local engine's input format (step E) can't be finished without editing `C:\Templar Archives\Cybernetics Core\llm\src\synthesize.py`, which is outside this repo.
 - Brave, Google and template selectors have to be checked in a real browser session; their current values are guesses carried over from earlier code.
 - `docs/phase-3.5-audit.md` has fuller background on the warm browser contexts (1.1), the warm Python worker (3.1) and the persistence format (Pillar 4).

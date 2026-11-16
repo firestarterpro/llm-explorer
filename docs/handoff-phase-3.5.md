@@ -43,7 +43,7 @@ The timeout constants are at the top of `main.js` (`PYTHON_TIMEOUT_MS`, etc.).
 | Source tags | Hidden internal tags `R1..Rn` per turn, mapped to provider ids. See T9. |
 | Fidelity suffix | Per-model toggle button that adds a self-score instruction to that model's prompt. See T7. |
 | Vault | All saved data goes in one folder, files named by date/time. The toolbar shows its size; clicking it opens the folder. See T12. |
-| Instruction files | The owner's local coder will clean the stray backslashes (`\#`, `\*\*`) in `C:\llm\instructions\*.md`. **Not your task.** |
+| Instruction files | The owner's local coder will clean the stray backslashes (`\#`, `\*\*`) in `C:\Templar Archives\Cybernetics Core\llm\instructions\*.md`. **Not your task.** |
 
 ## Tasks (in order)
 
@@ -142,7 +142,7 @@ Heat bands (put the text in one constant so it's easy to tune):
 ### T8. Synthesis pipeline (both engines)
 - **Pass the original user question to the synthesizer.** Currently neither engine sees
   it.
-- Both engines load the same instructions from `C:\llm\instructions\system_synthesizer.md`
+- Both engines load the same instructions from `C:\Templar Archives\Cybernetics Core\llm\instructions\system_synthesizer.md`
   and `fidelity_clause.md` (make the path a setting). Delete the hardcoded DeepSeek prompt
   in `main.js`.
 - Sources are sent as `{ tag, id, name, text }` (T9).
@@ -163,7 +163,7 @@ Heat bands (put the text in one constant so it's easy to tune):
   conflicts.
 - The globally unique key for a source is `node.id + '/' + tag`.
 
-### T10. `synthesize.py` (lives at `C:\llm\src\`; copy it into this repo as `python/synthesize.py`)
+### T10. `synthesize.py` (lives at `C:\Templar Archives\Cybernetics Core\llm\src\`; copy it into this repo as `python/synthesize.py`)
 1. **Keep the model loaded.** Make it a long-lived worker that loads the model once, then
    loops reading one JSON request per line from stdin:
    `{"id", "question", "sources":[{tag,name,text}]}`.
@@ -176,7 +176,7 @@ Heat bands (put the text in one constant so it's easy to tune):
    `enable_thinking=False`). Thinking tokens currently eat the 1500-token budget. As a
    backstop, remove `<think>…</think>` from the full text instead of checking per token.
 4. Use the source labels from T9. Remove the `ABC…` label list.
-5. Session transcripts are written to the vault (T12), not `C:\llm\outputs\sessions`.
+5. Session transcripts are written to the vault (T12), not `C:\Templar Archives\Cybernetics Core\llm\outputs\sessions`.
    Main passes the vault path via an env var or argument.
 
 Main side:
