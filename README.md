@@ -59,7 +59,7 @@ From source you can also set the key in the environment as `DEEPSEEK_API_KEY`.
 ## Optional: local GPU synthesis
 
 The original OpenVINO synthesizer is still available, but it is no longer the default. When
-`C:\llm\ov_env\Scripts\python.exe` and `C:\llm\src\synthesize.py` exist, a **⚡ Local GPU**
+`C:\Templar Archives\Cybernetics Core\llm\ov_env\Scripts\python.exe` and `C:\Templar Archives\Cybernetics Core\llm\src\synthesize.py` exist, a **⚡ Local GPU**
 engine option appears next to Send. Otherwise it is hidden and DeepSeek is used.
 
 ## Scripts
@@ -68,3 +68,44 @@ engine option appears next to Send. Otherwise it is hidden and DeepSeek is used.
 | --- | --- |
 | `npm start` | Run the Electron app from source. |
 | `npm run build:win` | Build the Windows NSIS installer into `dist\`. Installs Chromium into `pw-browsers\` first if it is missing. |
+
+## Tech stack
+
+**Desktop shell**
+- Electron 44.9.0: the app window, main process and renderer.
+- Node.js: the main process (local check: Node v24.20.0, npm 11.19.0).
+- Electron `contextBridge` and `ipcRenderer` (`preload.js`): the only channel between the page and the main process.
+- Electron `safeStorage` (Windows DPAPI): encrypts API keys in `settings.json`.
+- Electron `dialog`: the Markdown export save dialog.
+
+**Front end**
+- Vanilla HTML, CSS and JavaScript in one file, `index.html`. No framework, bundler or build step.
+- Anime.js 4.5.0, vendored as `vendor/anime.umd.min.js`.
+- A browser-demo fallback mode in the same `index.html`, used on GitHub Pages.
+
+**Website scraping**
+- Playwright 1.64.1 (`playwright`, which bundles `playwright-core`) drives headed Chromium with persistent profiles in `scrapers.js`.
+- Bundled browsers: `chromium-1248`, `winldd-1007` and `ffmpeg-1013`, copied into the installer through `extraResources`.
+- `scripts/install-browsers.js` fetches the Chromium build into `pw-browsers\`.
+
+**AI and APIs**
+- DeepSeek chat completions (`deepseek-flash`, streamed over SSE), called with `fetch`.
+- DeepSeek Search API (`POST /v1/tools/search`).
+- Any OpenAI-compatible endpoint for API providers. The templates include OpenAI, Groq, OpenRouter and Ollama.
+- Optional local synthesis: a Python 3 OpenVINO script (`C:\Templar Archives\Cybernetics Core\llm\src\synthesize.py`) run in `C:\Templar Archives\Cybernetics Core\llm\ov_env`, with an OVMS server on port 8000. This lives outside the repo.
+
+**Config and data**
+- `providers.json` (built-in providers), `templates.json` (installable presets), and `userData/providers.json` (your additions, merged on top).
+- `userData/settings.json` (encrypted keys and app preferences) and `browser_profiles/` (Playwright sessions).
+- Node built-ins: `fs`, `path`, `child_process.spawn`, `AbortSignal.timeout`.
+
+**Build and packaging**
+- electron-builder 26.15.3, producing an NSIS installer for Windows x64.
+- npm scripts: `start`, `build:win`, `postinstall` and `prebuild:win`.
+- `npm test` is a placeholder. There is no automated test suite.
+
+**Source control and hosting**
+- Git, with `origin` at `github.com/firestarterpro/llm-explorer`.
+- GitHub Pages serves the browser demo. GitHub Actions runs its "pages build and deployment" workflow on each push.
+
+**Dependencies:** `animejs` and `playwright` at runtime; `electron` and `electron-builder` as dev dependencies.
