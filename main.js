@@ -133,7 +133,43 @@ function defaultEmoji(kind) {
   return { api: '🧩', search: '🔎' }[kind] || '🌐';
 }
 
+// Built-in "local" API provider: the endpoint follows LLM_BASE_URL / LLM_MODEL
+// (set by C:\llm\endpoints\Use-LlmEndpoint.ps1), so it points at whichever
+// OpenAI-compatible OVMS server answered last (Dell first, Acer fallback).
+// It never carries a keyRef, so no stored key is ever sent to it.
+const LOCAL_LLM_DEFAULT_BASE = 'http://templarserver:8000/v3';
+const LOCAL_LLM_DEFAULT_MODEL = 'qwen3-8b';
+
+function localLlmTarget() {
+  const base = String(process.env.LLM_BASE_URL || LOCAL_LLM_DEFAULT_BASE).trim().replace(/\/+$/, '');
+  const model = String(process.env.LLM_MODEL || LOCAL_LLM_DEFAULT_MODEL).trim();
+  return { base, endpoint: `${base}/chat/completions`, model };
+}
+
+function applyLocalEnv(raw) {
+  if (!raw || raw.localEnv !== true) return raw;
+  const target = localLlmTarget();
+  const { keyRef, ...rest } = raw;
+  return { ...rest, kind: 'api', endpoint: target.endpoint, modelId: target.model };
+}
+
+// Answers whether the local server is up and serving the configured model.
+async function checkLocalLlm() {
+  const target = localLlmTarget();
+  try {
+    const response = await fetch(`${target.base}/models`, { signal: AbortSignal.timeout(3000) });
+    if (!response.ok) return { ok: false, ...target, error: `HTTP ${response.status}` };
+    const data = await response.json().catch(() => ({}));
+    const ids = Array.isArray(data.data) ? data.data.map(m => m && m.id) : [];
+    const ok = ids.length === 0 || ids.includes(target.model);
+    return { ok, ...target, models: ids, error: ok ? null : `model ${target.model} not listed` };
+  } catch (error) {
+    return { ok: false, ...target, error: String(error && error.message || error) };
+  }
+}
+
 function normalizeProvider(raw, isUser) {
+  raw = isUser ? raw : applyLocalEnv(raw);
   const kind = providerKind(raw.kind);
   return {
     ...raw,
@@ -1113,6 +1149,7 @@ app.whenReady().then(() => {
 
   // 2. Provider registry. User entries live in userData/providers.json.
   ipcMain.handle('providers:list', () => loadProviders());
+  ipcMain.handle('providers:local-health', () => checkLocalLlm());
 
   // Installable presets from the read-only templates.json in the app bundle.
   ipcMain.handle('templates:list', () => loadTemplates());

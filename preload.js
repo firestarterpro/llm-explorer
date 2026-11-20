@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('api', {
 
   // Provider registry
   getProviders: () => ipcRenderer.invoke('providers:list'),
+  getLocalLlmHealth: () => ipcRenderer.invoke('providers:local-health'),
   // Read-only installable presets from templates.json.
   getTemplates: () => ipcRenderer.invoke('templates:list'),
   addProvider: (cfg) => ipcRenderer.invoke('providers:add', cfg),
