@@ -2,6 +2,19 @@
   "version": 1,
   "providers": [
     {
+      "id": "local-llm",
+      "name": "Local (Dell/Acer)",
+      "emoji": "🏠",
+      "kind": "api",
+      "localEnv": true,
+      "checked": false,
+      "value": 50,
+      "prefixType": "Concise",
+      "maxTokens": 1000,
+      "tps": 10,
+      "ttft": 1
+    },
+    {
       "id": "deepseek-search",
       "name": "DeepSeek Search",
       "emoji": "🔎",
