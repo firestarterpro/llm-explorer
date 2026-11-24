@@ -4,8 +4,8 @@ const fs = require('fs');
 const { spawn } = require('child_process');
 const scrapers = require('./scrapers');
 
-const PYTHON_SCRIPT_PATH = 'C:\\llm\\src\\synthesize.py';
-const PYTHON_EXE = 'C:\\llm\\ov_env\\Scripts\\python.exe';
+const PYTHON_SCRIPT_PATH = 'C:\\Templar Archives\\Cybernetics Core\\llm\\src\\synthesize.py';
+const PYTHON_EXE = 'C:\\Templar Archives\\Cybernetics Core\\llm\\ov_env\\Scripts\\python.exe';
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/chat/completions';
 // deepseek-chat and deepseek-reasoner were scheduled for retirement on
 // 2026-07-24; DeepSeek's docs name deepseek-flash as the current fast model.
@@ -134,11 +134,11 @@ function defaultEmoji(kind) {
 }
 
 // Built-in "local" API provider: the endpoint follows LLM_BASE_URL / LLM_MODEL
-// (set by C:\llm\endpoints\Use-LlmEndpoint.ps1), so it points at whichever
+// (set by C:\Templar Archives\Robotics Facility\llm\endpoints\Use-LlmEndpoint.ps1), so it points at whichever
 // OpenAI-compatible OVMS server answered last (Dell first, Acer fallback).
 // It never carries a keyRef, so no stored key is ever sent to it.
 const LOCAL_LLM_DEFAULT_BASE = 'http://templarserver:8000/v3';
-const LOCAL_LLM_DEFAULT_MODEL = 'qwen3-8b';
+const LOCAL_LLM_DEFAULT_MODEL = 'qwen3.5-4b';
 
 function localLlmTarget() {
   const base = String(process.env.LLM_BASE_URL || LOCAL_LLM_DEFAULT_BASE).trim().replace(/\/+$/, '');
@@ -1206,7 +1206,7 @@ app.whenReady().then(() => {
   });
 
   // 4. Whether the Local GPU engine can run here. A stakeholder's machine has
-  // no C:\llm Python environment, so the renderer hides the Local option.
+  // no Cybernetics Core\llm Python environment, so the renderer hides the Local option.
   ipcMain.handle('engine:status', () => ({
     localAvailable: fs.existsSync(PYTHON_EXE)
   }));
